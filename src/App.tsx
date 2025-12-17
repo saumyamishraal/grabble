@@ -12,30 +12,35 @@ import Rack from './components/Rack';
 import ActionButtons from './components/ActionButtons';
 import WordsPanel from './components/WordsPanel';
 
-// Dictionary - loaded from file
-let dictionary = new Set<string>();
-
-async function loadDictionary() {
+// Dictionary loading function
+async function loadDictionary(): Promise<Set<string>> {
   try {
+    console.log('Loading dictionary from /dictionary.txt...');
     const response = await fetch('/dictionary.txt');
+    console.log('Dictionary fetch response:', response.status, response.statusText);
+    
     if (!response.ok) {
-      console.warn('Dictionary file not found, using fallback');
-      dictionary = new Set(['CAT', 'DOG', 'BAT', 'RAT', 'MAT', 'SAT', 'HAT', 'PAT',
+      console.warn('Dictionary file not found (status:', response.status, '), using fallback');
+      return new Set(['CAT', 'DOG', 'BAT', 'RAT', 'MAT', 'SAT', 'HAT', 'PAT',
         'CAR', 'BAR', 'FAR', 'TAR', 'WAR', 'JAR',
         'BED', 'RED', 'FED', 'LED', 'TED',
         'BIG', 'DIG', 'FIG', 'JIG', 'PIG', 'WIG']);
-      return;
     }
+    
     const text = await response.text();
+    console.log('Dictionary text loaded, length:', text.length, 'characters');
+    
     const words = text.split('\n')
       .map(line => line.trim().toUpperCase())
       .filter(line => line.length > 0 && !line.startsWith('#')) // Skip empty lines and comments
       .filter(word => word.length >= 3 && /^[A-Z]+$/.test(word));
-    dictionary = new Set(words);
-    console.log(`Loaded ${dictionary.size} words from dictionary`);
+    
+    const dict = new Set(words);
+    console.log(`Loaded ${dict.size} words from dictionary (first 10:`, Array.from(dict).slice(0, 10), ')');
+    return dict;
   } catch (error) {
     console.error('Error loading dictionary:', error);
-    dictionary = new Set(['CAT', 'DOG', 'BAT', 'RAT', 'MAT', 'SAT', 'HAT', 'PAT',
+    return new Set(['CAT', 'DOG', 'BAT', 'RAT', 'MAT', 'SAT', 'HAT', 'PAT',
       'CAR', 'BAR', 'FAR', 'TAR', 'WAR', 'JAR',
       'BED', 'RED', 'FED', 'LED', 'TED',
       'BIG', 'DIG', 'FIG', 'JIG', 'PIG', 'WIG']);
@@ -49,13 +54,29 @@ function App() {
   const [selectedWordPositions, setSelectedWordPositions] = useState<Position[]>([]);
   const [wordDirection, setWordDirection] = useState<'horizontal' | 'vertical' | 'diagonal' | null>(null);
   const [pendingPlacements, setPendingPlacements] = useState<Array<{ column: number; tile: Tile }>>([]);
+  const [tilesPlacedThisTurn, setTilesPlacedThisTurn] = useState<Position[]>([]); // Track tiles placed this turn
   const [isPlacingTiles, setIsPlacingTiles] = useState(false);
   const [showSetup, setShowSetup] = useState(true);
+  const [dictionary, setDictionary] = useState<Set<string>>(new Set());
   const [dictionaryLoaded, setDictionaryLoaded] = useState(false);
   const [renderKey, setRenderKey] = useState(0); // Force re-render
 
   useEffect(() => {
-    loadDictionary().then(() => setDictionaryLoaded(true));
+    loadDictionary().then((dict) => {
+      console.log('Setting dictionary state, size:', dict.size);
+      setDictionary(dict);
+      setDictionaryLoaded(true);
+      console.log('Dictionary loaded in state, size:', dict.size);
+    }).catch((error) => {
+      console.error('Failed to load dictionary:', error);
+      // Set fallback dictionary
+      const fallback = new Set(['CAT', 'DOG', 'BAT', 'RAT', 'MAT', 'SAT', 'HAT', 'PAT',
+        'CAR', 'BAR', 'FAR', 'TAR', 'WAR', 'JAR',
+        'BED', 'RED', 'FED', 'LED', 'TED',
+        'BIG', 'DIG', 'FIG', 'JIG', 'PIG', 'WIG']);
+      setDictionary(fallback);
+      setDictionaryLoaded(true);
+    });
   }, []);
 
   const handleStartGame = (numPlayers: number, playerNames: string[], targetScore: number) => {
@@ -117,6 +138,21 @@ function App() {
       // Remove tile from rack (don't refill - wait until after submit)
       currentPlayer.rack = currentPlayer.rack.filter((_, i) => i !== index);
       
+      // Track where tile was placed (after gravity)
+      const state = engine.getState();
+      let placedPosition: Position | null = null;
+      for (let y = 6; y >= 0; y--) {
+        const boardTile = state.board[y][column];
+        if (boardTile && boardTile.playerId === currentPlayer.id && boardTile.letter === tile.letter) {
+          placedPosition = { x: column, y };
+          break;
+        }
+      }
+      
+      if (placedPosition) {
+        setTilesPlacedThisTurn(prev => [...prev, placedPosition!]);
+      }
+      
       // Clear selections
       setSelectedTiles(prev => prev.filter(i => i !== index));
       setPendingPlacements([]);
@@ -126,7 +162,7 @@ function App() {
       // The state is already updated in the engine, we just need to trigger React re-render
       setRenderKey(prev => prev + 1);
       
-      console.log('Tile placed successfully');
+      console.log('Tile placed successfully at:', placedPosition);
     } catch (error) {
       console.error('Error placing tile:', error);
       alert(`Error placing tile: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -193,8 +229,18 @@ function App() {
     
     const currentPlayer = gameManager.getCurrentPlayer();
     
-    if (pendingPlacements.length > 0) {
-      try {
+    // Check if we have tiles placed this turn OR pending placements
+    const hasPlacedTiles = tilesPlacedThisTurn.length > 0 || pendingPlacements.length > 0;
+    
+    if (!hasPlacedTiles && selectedWordPositions.length === 0) {
+      alert('Please place tiles or select a word before submitting.');
+      return;
+    }
+    
+    try {
+      // Handle pending placements (click-based placement)
+      let newlyPlacedFromPending: Position[] = [];
+      if (pendingPlacements.length > 0) {
         // Remove tiles from rack
         const tilesToPlace = pendingPlacements.map(p => p.tile);
         const newRack = currentPlayer.rack.filter((tile, idx) => {
@@ -210,72 +256,115 @@ function App() {
         
         // Get newly placed positions (after gravity)
         const state = engine.getState();
-        const newlyPlacedTiles: Position[] = [];
         for (const placement of pendingPlacements) {
           for (let y = 6; y >= 0; y--) {
             const tile = state.board[y][placement.column];
             if (tile && tile.playerId === currentPlayer.id) {
-              newlyPlacedTiles.push({ x: placement.column, y });
+              newlyPlacedFromPending.push({ x: placement.column, y });
               break;
             }
           }
         }
-        
-        // Process word claims
-        if (selectedWordPositions.length > 0) {
-          // Require word direction to be selected
-          if (!wordDirection) {
-            alert('Please select word direction (horizontal, vertical, or diagonal) before submitting.');
-            return;
-          }
-          
-          // Validate that positions match the selected direction
-          const detected = detectWordDirection(selectedWordPositions);
-          if (detected !== wordDirection) {
-            alert(`Selected positions form a ${detected || 'invalid'} line, but you selected ${wordDirection}. Please correct your selection.`);
-            return;
-          }
-          
-          const claims: WordClaim[] = [{
-            positions: selectedWordPositions,
-            playerId: currentPlayer.id
-          }];
-          
-          const result = await engine.processWordClaims(claims, newlyPlacedTiles, dictionary);
-          
-          if (!result.valid) {
-            alert('Invalid word claims: ' + result.results.map(r => r.error).join(', '));
-            return;
-          }
-          
-          setSelectedWordPositions([]);
-          setWordDirection(null);
-        }
-        
-        // Refill rack and advance turn (only after submitting)
-        engine.refillPlayerRack(currentPlayer.id);
-        engine.advanceTurn();
-        
-        // Clear word direction
-        setWordDirection(null);
-        
-        // Check win condition
-        const winnerId = engine.checkWinCondition();
-        if (winnerId !== null) {
-          const winner = gameManager.getPlayer(winnerId);
-          alert(`Game Over! ${winner?.name} wins with ${winner?.score} points!`);
-        }
-        
-        setPendingPlacements([]);
-        setSelectedTiles([]);
-        
-        // Force re-render by updating state
-        setGameManager(gameManager);
-        setEngine(engine);
-        
-      } catch (error) {
-        alert('Error: ' + (error as Error).message);
+        setTilesPlacedThisTurn(prev => [...prev, ...newlyPlacedFromPending]);
       }
+      
+      // Combine all newly placed tiles for validation
+      const allNewlyPlacedTiles = [...tilesPlacedThisTurn, ...newlyPlacedFromPending];
+      
+      console.log('Submit move - tiles placed this turn:', allNewlyPlacedTiles);
+      console.log('Submit move - selected word positions:', selectedWordPositions);
+      console.log('Submit move - dictionary size:', dictionary.size, 'dictionary loaded:', dictionaryLoaded);
+      
+      if (!dictionaryLoaded || dictionary.size === 0) {
+        alert('Dictionary is still loading. Please wait...');
+        return;
+      }
+      
+      // Process word claims
+      if (selectedWordPositions.length > 0) {
+        // Require word direction to be selected
+        if (!wordDirection) {
+          alert('Please select word direction (horizontal, vertical, or diagonal) before submitting.');
+          return;
+        }
+        
+        // Validate that positions match the selected direction
+        const detected = detectWordDirection(selectedWordPositions);
+        if (detected !== wordDirection) {
+          alert(`Selected positions form a ${detected || 'invalid'} line, but you selected ${wordDirection}. Please correct your selection.`);
+          return;
+        }
+        
+        // Check if word contains at least one newly placed tile
+        if (allNewlyPlacedTiles.length > 0) {
+          const hasNewTile = allNewlyPlacedTiles.some(newPos =>
+            selectedWordPositions.some(pos => pos.x === newPos.x && pos.y === newPos.y)
+          );
+          
+          if (!hasNewTile) {
+            alert('Selected word must contain at least one tile you placed this turn.');
+            return;
+          }
+        }
+        
+        const claims: WordClaim[] = [{
+          positions: selectedWordPositions,
+          playerId: currentPlayer.id
+        }];
+        
+        console.log('Processing word claims:', { 
+          claims, 
+          newlyPlacedTiles: allNewlyPlacedTiles,
+          dictionarySize: dictionary.size,
+          dictionaryLoaded,
+          sampleWords: Array.from(dictionary).slice(0, 5)
+        });
+        
+        if (dictionary.size === 0) {
+          alert('Dictionary not loaded yet. Please wait...');
+          return;
+        }
+        
+        const result = await engine.processWordClaims(claims, allNewlyPlacedTiles, dictionary);
+        
+        console.log('Word claims result:', result);
+        
+        if (!result.valid) {
+          alert('Invalid word claims: ' + result.results.map(r => r.error).join(', '));
+          return;
+        }
+        
+        console.log('Word claims validated successfully! Score:', result.totalScore);
+        setSelectedWordPositions([]);
+        setWordDirection(null);
+      } else if (allNewlyPlacedTiles.length > 0) {
+        // Tiles placed but no word selected - still allow submit (pass turn)
+        console.log('Tiles placed but no word claimed - passing turn');
+      }
+      
+      // Refill rack and advance turn (only after submitting)
+      engine.refillPlayerRack(currentPlayer.id);
+      engine.advanceTurn();
+      
+      // Clear all turn state
+      setWordDirection(null);
+      setTilesPlacedThisTurn([]);
+      setPendingPlacements([]);
+      setSelectedTiles([]);
+      
+      // Check win condition
+      const winnerId = engine.checkWinCondition();
+      if (winnerId !== null) {
+        const winner = gameManager.getPlayer(winnerId);
+        alert(`Game Over! ${winner?.name} wins with ${winner?.score} points!`);
+      }
+      
+      // Force re-render by updating render key
+      setRenderKey(prev => prev + 1);
+      
+    } catch (error) {
+      console.error('Error submitting move:', error);
+      alert('Error: ' + (error as Error).message);
     }
   };
 
@@ -328,7 +417,7 @@ function App() {
         }}
       />
       <ActionButtons
-        canSubmit={pendingPlacements.length > 0 || selectedWordPositions.length > 0}
+        canSubmit={tilesPlacedThisTurn.length > 0 || pendingPlacements.length > 0 || selectedWordPositions.length > 0}
         onSubmit={handleSubmitMove}
         onSwap={handleSwapTiles}
         canSwap={selectedTiles.length > 0}
