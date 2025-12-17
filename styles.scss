@@ -1,0 +1,398 @@
+/**
+ * Grabble - Mobile-First Vertical Layout
+ */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: #f5f5f5;
+    color: #333;
+    overflow-x: hidden;
+}
+
+.game-container {
+    max-width: 100vw;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+
+/* Navbar */
+.navbar {
+    background: #2c3e50;
+    color: white;
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+
+    h1 {
+        font-size: 1.5rem;
+        font-weight: bold;
+    }
+
+    .turn-indicator {
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+
+    .menu-btn {
+        background: none;
+        border: none;
+        color: white;
+        font-size: 1.5rem;
+        cursor: pointer;
+        padding: 0.25rem 0.5rem;
+    }
+}
+
+/* Score Area */
+.score-area {
+    background: white;
+    padding: 1rem;
+    display: flex;
+    justify-content: space-around;
+    gap: 1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    flex-wrap: wrap;
+
+    .player-score {
+        text-align: center;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        transition: all 0.3s;
+
+        &.current-player {
+            background: #e3f2fd;
+            border: 2px solid #2196f3;
+            font-weight: bold;
+        }
+
+        .player-name {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 0.25rem;
+        }
+
+        .score-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2196f3;
+        }
+    }
+}
+
+/* Board Container */
+.board-container {
+    padding: 1rem;
+    display: flex;
+    justify-content: center;
+    background: #fafafa;
+}
+
+.board {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-template-rows: repeat(7, 1fr);
+    gap: 2px;
+    background: #333;
+    padding: 2px;
+    border-radius: 8px;
+    max-width: min(90vw, 400px);
+    aspect-ratio: 1;
+
+    .cell {
+        background: white;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+        min-height: 0;
+
+        &:hover {
+            background: #f0f0f0;
+        }
+
+        &.drop-zone {
+            background: #e3f2fd;
+            border: 2px dashed #2196f3;
+        }
+
+        &.highlighted {
+            background: #fff9c4;
+            border: 2px solid #fbc02d;
+        }
+
+        .tile {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            padding: 0.25rem;
+            font-size: clamp(0.8rem, 3vw, 1.2rem);
+
+            .letter {
+                font-size: 1em;
+                font-weight: bold;
+            }
+
+            .points {
+                font-size: 0.5em;
+                opacity: 0.7;
+                margin-top: 0.1rem;
+            }
+        }
+    }
+}
+
+/* Rack Container */
+.rack-container {
+    padding: 1rem;
+    background: white;
+    margin-top: auto;
+
+    .rack-label {
+        font-size: 0.9rem;
+        color: #666;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+    }
+}
+
+.rack {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    min-height: 80px;
+
+    .rack-tile {
+        width: 50px;
+        height: 60px;
+        background: #fff;
+        border: 2px solid #ddd;
+        border-radius: 6px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: grab;
+        transition: all 0.2s;
+        font-size: 1rem;
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+
+        &:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        &.selected {
+            border-color: #2196f3;
+            background: #e3f2fd;
+            transform: translateY(-4px);
+        }
+
+        &.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+
+        .letter {
+            font-size: 1.2em;
+        }
+
+        .points {
+            font-size: 0.6em;
+            opacity: 0.7;
+            margin-top: 0.1rem;
+        }
+    }
+}
+
+/* Action Buttons */
+.action-buttons {
+    padding: 1rem;
+    display: flex;
+    gap: 1rem;
+    background: white;
+    border-top: 1px solid #eee;
+
+    .btn {
+        flex: 1;
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+
+        &.btn-primary {
+            background: #2196f3;
+            color: white;
+
+            &:hover:not(:disabled) {
+                background: #1976d2;
+            }
+
+            &:disabled {
+                background: #ccc;
+                cursor: not-allowed;
+            }
+        }
+
+        &.btn-secondary {
+            background: #f5f5f5;
+            color: #333;
+            border: 1px solid #ddd;
+
+            &:hover {
+                background: #e0e0e0;
+            }
+        }
+    }
+}
+
+/* Words Panel */
+.words-panel {
+    background: white;
+    padding: 1rem;
+    max-height: 200px;
+    overflow-y: auto;
+    border-top: 1px solid #eee;
+
+    h3 {
+        font-size: 1rem;
+        margin-bottom: 0.5rem;
+        color: #666;
+    }
+
+    .words-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+
+        .word-item {
+            padding: 0.5rem;
+            background: #f9f9f9;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+
+            .word-text {
+                font-weight: bold;
+            }
+
+            .word-score {
+                color: #2196f3;
+                font-weight: bold;
+            }
+
+            .word-bonuses {
+                font-size: 0.75rem;
+                color: #666;
+                margin-left: 0.5rem;
+            }
+        }
+    }
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+
+    &.show {
+        display: flex;
+    }
+
+    .modal-content {
+        background: white;
+        padding: 2rem;
+        border-radius: 12px;
+        max-width: 90%;
+        width: 400px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+
+        h2 {
+            margin-bottom: 1.5rem;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+
+            label {
+                display: block;
+                margin-bottom: 0.5rem;
+                color: #666;
+                font-size: 0.9rem;
+            }
+
+            input, select {
+                width: 100%;
+                padding: 0.75rem;
+                border: 1px solid #ddd;
+                border-radius: 6px;
+                font-size: 1rem;
+
+                &:focus {
+                    outline: none;
+                    border-color: #2196f3;
+                }
+            }
+        }
+
+        .btn {
+            width: 100%;
+            margin-top: 1rem;
+        }
+    }
+}
+
+/* Responsive adjustments for larger screens */
+@media (min-width: 768px) {
+    .game-container {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .board {
+        max-width: 500px;
+    }
+
+    .rack .rack-tile {
+        width: 60px;
+        height: 70px;
+    }
+}
+
