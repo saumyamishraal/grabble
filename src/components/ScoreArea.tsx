@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Player } from '../game-engine';
+import type { Player } from '../types';
 
 interface ScoreAreaProps {
   players: Player[];

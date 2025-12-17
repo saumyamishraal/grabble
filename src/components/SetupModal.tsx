@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { Player } from '../game-engine';
+import type { Player } from '../types';
 
 interface SetupModalProps {
   onStartGame: (numPlayers: number, playerNames: string[], targetScore: number) => void;

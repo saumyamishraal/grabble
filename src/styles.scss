@@ -108,7 +108,8 @@ body {
     background: #333;
     padding: 2px;
     border-radius: 8px;
-    max-width: min(90vw, 400px);
+    width: min(90vw, 400px);
+    height: min(90vw, 400px);
     aspect-ratio: 1;
 
     .cell {
@@ -122,15 +123,32 @@ body {
         cursor: pointer;
         transition: all 0.2s;
         position: relative;
-        min-height: 0;
+        min-height: 40px;
+        min-width: 40px;
+        border: 1px solid #e0e0e0;
 
         &:hover {
             background: #f0f0f0;
+            border-color: #2196f3;
         }
 
         &.drop-zone {
             background: #e3f2fd;
             border: 2px dashed #2196f3;
+            position: relative;
+            
+            .drop-indicator {
+                color: #2196f3;
+                font-size: 1.5rem;
+                font-weight: bold;
+            }
+        }
+        
+        &.drop-zone.drag-over {
+            background: #bbdefb !important;
+            border: 2px solid #2196f3 !important;
+            transform: scale(1.05);
+            z-index: 10;
         }
 
         &.highlighted {
@@ -192,6 +210,20 @@ body {
         border-radius: 6px;
         display: flex;
         flex-direction: column;
+        cursor: grab;
+        
+        &:active {
+            cursor: grabbing;
+        }
+        
+        &[draggable="true"] {
+            cursor: grab;
+            
+            &:hover {
+                transform: scale(1.05);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            }
+        }
         align-items: center;
         justify-content: center;
         cursor: grab;

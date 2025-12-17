@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 import './styles.scss';
-import { GameStateManager, GrabbleEngine } from './game-engine';
-import type { Tile, Position, WordClaim, Player, ClaimedWord } from './game-engine';
+import { GrabbleEngine } from './game-engine';
+import { GameStateManager } from './game-state-manager';
+import type { Tile, Position, WordClaim, Player, ClaimedWord } from './types';
 import SetupModal from './components/SetupModal';
 import Navbar from './components/Navbar';
 import ScoreArea from './components/ScoreArea';
@@ -80,6 +81,37 @@ function App() {
     
     setPendingPlacements(prev => [...prev, { column, tile }]);
     setSelectedTiles(prev => prev.slice(1));
+    setIsPlacingTiles(true);
+  };
+
+  const handleTileDrop = (column: number, tileData: { index: number; tile: Tile }) => {
+    if (!gameManager || !engine) {
+      console.warn('Game manager or engine not available');
+      return;
+    }
+    
+    console.log('handleTileDrop called:', { column, tileData });
+    
+    const currentPlayer = gameManager.getCurrentPlayer();
+    const { index, tile } = tileData;
+    
+    // Verify the tile exists at this index
+    if (index < 0 || index >= currentPlayer.rack.length) {
+      console.warn('Invalid tile index:', index);
+      return;
+    }
+    
+    const rackTile = currentPlayer.rack[index];
+    if (!rackTile || rackTile.letter !== tile.letter || rackTile.points !== tile.points) {
+      console.warn('Tile mismatch at index:', { index, expected: tile, found: rackTile });
+      return;
+    }
+    
+    console.log('Adding tile to pending placements:', { column, tile });
+    
+    // Add to pending placements - the tile will be removed from rack when submitted
+    setPendingPlacements(prev => [...prev, { column, tile }]);
+    setSelectedTiles(prev => prev.filter(i => i !== index));
     setIsPlacingTiles(true);
   };
 
@@ -209,11 +241,15 @@ function App() {
         isPlacingTiles={isPlacingTiles}
         onCellClick={handleCellClick}
         onColumnClick={handleColumnClick}
+        onTileDrop={handleTileDrop}
       />
       <Rack 
         tiles={currentPlayer.rack}
         selectedIndices={selectedTiles}
         onTileClick={handleTileSelect}
+        onTileDragStart={(index, tile) => {
+          // Optional: visual feedback when dragging starts
+        }}
       />
       <ActionButtons
         canSubmit={pendingPlacements.length > 0 || selectedWordPositions.length > 0}

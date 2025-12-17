@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ClaimedWord } from '../game-engine';
+import type { ClaimedWord } from '../types';
 
 interface WordsPanelProps {
   claimedWords: ClaimedWord[];
