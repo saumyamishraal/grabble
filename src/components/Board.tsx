@@ -173,7 +173,6 @@ const Board: React.FC<BoardProps> = ({
       setIsTouchingWord(true);
       setTouchStartPos({ x, y });
       setTouchCurrentPos({ x, y });
-      setTouchStartTime(Date.now());
       e.preventDefault(); // Prevent scrolling
       e.stopPropagation();
     }
@@ -219,7 +218,6 @@ const Board: React.FC<BoardProps> = ({
       setIsTouchingWord(false);
       setTouchStartPos(null);
       setTouchCurrentPos(null);
-      setTouchStartTime(0);
       e.preventDefault();
       e.stopPropagation();
     } else if (x !== undefined && y !== undefined) {
