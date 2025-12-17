@@ -47,10 +47,12 @@ function App() {
   const [engine, setEngine] = useState<GrabbleEngine | null>(null);
   const [selectedTiles, setSelectedTiles] = useState<number[]>([]);
   const [selectedWordPositions, setSelectedWordPositions] = useState<Position[]>([]);
+  const [wordDirection, setWordDirection] = useState<'horizontal' | 'vertical' | 'diagonal' | null>(null);
   const [pendingPlacements, setPendingPlacements] = useState<Array<{ column: number; tile: Tile }>>([]);
   const [isPlacingTiles, setIsPlacingTiles] = useState(false);
   const [showSetup, setShowSetup] = useState(true);
   const [dictionaryLoaded, setDictionaryLoaded] = useState(false);
+  const [renderKey, setRenderKey] = useState(0); // Force re-render
 
   useEffect(() => {
     loadDictionary().then(() => setDictionaryLoaded(true));
@@ -107,12 +109,47 @@ function App() {
       return;
     }
     
-    console.log('Adding tile to pending placements:', { column, tile });
+    try {
+      // Place tile immediately on the board
+      const placement = { column, tile };
+      engine.placeTiles([placement], currentPlayer.id);
+      
+      // Remove tile from rack (don't refill - wait until after submit)
+      currentPlayer.rack = currentPlayer.rack.filter((_, i) => i !== index);
+      
+      // Clear selections
+      setSelectedTiles(prev => prev.filter(i => i !== index));
+      setPendingPlacements([]);
+      setIsPlacingTiles(false);
+      
+      // Force re-render by updating render key
+      // The state is already updated in the engine, we just need to trigger React re-render
+      setRenderKey(prev => prev + 1);
+      
+      console.log('Tile placed successfully');
+    } catch (error) {
+      console.error('Error placing tile:', error);
+      alert(`Error placing tile: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Helper function to detect word direction from positions
+  const detectWordDirection = (positions: Position[]): 'horizontal' | 'vertical' | 'diagonal' | null => {
+    if (positions.length < 2) return null;
     
-    // Add to pending placements - the tile will be removed from rack when submitted
-    setPendingPlacements(prev => [...prev, { column, tile }]);
-    setSelectedTiles(prev => prev.filter(i => i !== index));
-    setIsPlacingTiles(true);
+    const sorted = [...positions].sort((a, b) => {
+      if (a.y !== b.y) return a.y - b.y;
+      return a.x - b.x;
+    });
+    
+    const dx = sorted[1].x - sorted[0].x;
+    const dy = sorted[1].y - sorted[0].y;
+    
+    if (dx === 0 && dy !== 0) return 'vertical';
+    if (dx !== 0 && dy === 0) return 'horizontal';
+    if (dx !== 0 && dy !== 0 && Math.abs(dx) === Math.abs(dy)) return 'diagonal';
+    
+    return null;
   };
 
   const handleCellClick = (x: number, y: number) => {
@@ -122,9 +159,31 @@ function App() {
     setSelectedWordPositions(prev => {
       const idx = prev.findIndex(p => p.x === x && p.y === y);
       if (idx === -1) {
-        return [...prev, pos];
+        const newPositions = [...prev, pos];
+        // Auto-detect direction when 2+ positions selected
+        if (newPositions.length >= 2) {
+          const detected = detectWordDirection(newPositions);
+          if (detected) {
+            setWordDirection(detected);
+          }
+        } else {
+          setWordDirection(null);
+        }
+        return newPositions;
       } else {
-        return prev.filter((_, i) => i !== idx);
+        const newPositions = prev.filter((_, i) => i !== idx);
+        // Re-detect direction if positions remain
+        if (newPositions.length >= 2) {
+          const detected = detectWordDirection(newPositions);
+          if (detected) {
+            setWordDirection(detected);
+          } else {
+            setWordDirection(null);
+          }
+        } else {
+          setWordDirection(null);
+        }
+        return newPositions;
       }
     });
   };
@@ -164,6 +223,19 @@ function App() {
         
         // Process word claims
         if (selectedWordPositions.length > 0) {
+          // Require word direction to be selected
+          if (!wordDirection) {
+            alert('Please select word direction (horizontal, vertical, or diagonal) before submitting.');
+            return;
+          }
+          
+          // Validate that positions match the selected direction
+          const detected = detectWordDirection(selectedWordPositions);
+          if (detected !== wordDirection) {
+            alert(`Selected positions form a ${detected || 'invalid'} line, but you selected ${wordDirection}. Please correct your selection.`);
+            return;
+          }
+          
           const claims: WordClaim[] = [{
             positions: selectedWordPositions,
             playerId: currentPlayer.id
@@ -177,11 +249,15 @@ function App() {
           }
           
           setSelectedWordPositions([]);
+          setWordDirection(null);
         }
         
-        // Refill rack and advance turn
+        // Refill rack and advance turn (only after submitting)
         engine.refillPlayerRack(currentPlayer.id);
         engine.advanceTurn();
+        
+        // Clear word direction
+        setWordDirection(null);
         
         // Check win condition
         const winnerId = engine.checkWinCondition();
@@ -232,7 +308,7 @@ function App() {
   const currentPlayer = gameManager.getCurrentPlayer();
 
   return (
-    <div className="game-container">
+    <div className="game-container" key={renderKey}>
       <Navbar currentPlayerName={currentPlayer.name} />
       <ScoreArea players={state.players} currentPlayerId={state.currentPlayerId} />
       <Board 
@@ -256,6 +332,9 @@ function App() {
         onSubmit={handleSubmitMove}
         onSwap={handleSwapTiles}
         canSwap={selectedTiles.length > 0}
+        wordDirection={wordDirection}
+        onDirectionChange={setWordDirection}
+        hasWordSelected={selectedWordPositions.length > 0}
       />
       <WordsPanel claimedWords={state.claimedWords} />
     </div>
