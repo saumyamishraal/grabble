@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/grabble/static/css/main.d6a229f0.css",
+    "main.js": "/grabble/static/js/main.4e0b1cdc.js",
+    "static/js/453.6b23feef.chunk.js": "/grabble/static/js/453.6b23feef.chunk.js",
+    "index.html": "/grabble/index.html",
+    "main.d6a229f0.css.map": "/grabble/static/css/main.d6a229f0.css.map",
+    "main.4e0b1cdc.js.map": "/grabble/static/js/main.4e0b1cdc.js.map",
+    "453.6b23feef.chunk.js.map": "/grabble/static/js/453.6b23feef.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.d6a229f0.css",
+    "static/js/main.4e0b1cdc.js"
+  ]
+}
