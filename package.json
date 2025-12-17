@@ -1,0 +1,23 @@
+{
+  "name": "grabble",
+  "version": "0.1.0",
+  "description": "Scrabble with Gravity - A turn-based multiplayer word game",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "keywords": [
+    "scrabble",
+    "word-game",
+    "multiplayer",
+    "gravity"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^4.9.5"
+  }
+}
+
