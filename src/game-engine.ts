@@ -99,6 +99,45 @@ export class GrabbleEngine {
     }
 
     /**
+     * Place a tile directly at a specific position (without gravity)
+     * Used for dropping tiles anywhere on the board
+     */
+    placeTileAtPosition(x: number, y: number, tile: Tile, playerId: number): void {
+        if (x < 0 || x >= 7 || y < 0 || y >= 7) {
+            throw new Error(`Invalid position: (${x}, ${y})`);
+        }
+        
+        if (this.state.board[y][x] !== null) {
+            throw new Error(`Position (${x}, ${y}) is already occupied`);
+        }
+        
+        this.state.board[y][x] = {
+            ...tile,
+            playerId
+        };
+    }
+
+    /**
+     * Remove a tile from the board at the given position
+     * Returns the removed tile or null if position was empty
+     */
+    removeTile(x: number, y: number): Tile | null {
+        if (x < 0 || x >= 7 || y < 0 || y >= 7) {
+            throw new Error(`Invalid position: (${x}, ${y})`);
+        }
+        
+        const tile = this.state.board[y][x];
+        if (tile === null) {
+            return null;
+        }
+        
+        this.state.board[y][x] = null;
+        // Resolve gravity after removal
+        this.resolveGravity();
+        return tile;
+    }
+
+    /**
      * Resolve gravity - tiles fall straight down until they hit bottom or another tile
      */
     private resolveGravity(): void {

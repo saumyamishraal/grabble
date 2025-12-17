@@ -1,123 +1,334 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Tile, Position } from '../types';
+import { getPlayerColor } from '../utils/playerColors';
+import { isValidWordLine } from '../word-detection';
 
 interface BoardProps {
   board: (Tile | null)[][];
   selectedPositions: Position[];
   isPlacingTiles: boolean;
-  onCellClick: (x: number, y: number) => void;
   onColumnClick: (column: number) => void;
-  onTileDrop?: (column: number, tileData: { index: number; tile: Tile }) => void;
+  onTileDrop?: (x: number, y: number, tileData: { index: number; tile: Tile }) => void;
+  onTileRemove?: (x: number, y: number) => void;
+  fallingTiles?: Set<string>;
+  currentPlayerId?: number;
+  onWordSelect?: (positions: Position[]) => void;
 }
 
 const Board: React.FC<BoardProps> = ({ 
   board, 
   selectedPositions, 
   isPlacingTiles, 
-  onCellClick, 
   onColumnClick,
-  onTileDrop
+  onTileDrop,
+  onTileRemove,
+  fallingTiles = new Set(),
+  currentPlayerId,
+  onWordSelect
 }) => {
-  const [dragOverColumn, setDragOverColumn] = useState<number | null>(null);
+  const [dragOverCell, setDragOverCell] = useState<Position | null>(null);
+  const [draggedTilePos, setDraggedTilePos] = useState<Position | null>(null);
+  const [draggedTileForRemoval, setDraggedTileForRemoval] = useState<Position | null>(null);
+  const [isDraggingWord, setIsDraggingWord] = useState(false);
+  const [dragStartPos, setDragStartPos] = useState<Position | null>(null);
+  const [dragCurrentPos, setDragCurrentPos] = useState<Position | null>(null);
+
+  // Add document-level drop handler to catch drops outside the board
+  useEffect(() => {
+    const handleDocumentDrop = (e: DragEvent) => {
+      // Only handle if we're dragging a tile from the board
+      if (draggedTileForRemoval && onTileRemove) {
+        const boardContainer = document.querySelector('.board-container');
+        if (boardContainer) {
+          const rect = boardContainer.getBoundingClientRect();
+          const xPos = e.clientX;
+          const yPos = e.clientY;
+          
+          // If dropped outside the board container, remove the tile
+          if (xPos < rect.left || xPos > rect.right || yPos < rect.top || yPos > rect.bottom) {
+            console.log('Tile dropped outside board, removing:', draggedTileForRemoval);
+            onTileRemove(draggedTileForRemoval.x, draggedTileForRemoval.y);
+            setDraggedTileForRemoval(null);
+          }
+        }
+      }
+    };
+
+    const handleDocumentDragOver = (e: DragEvent) => {
+      // Allow drop outside board
+      if (draggedTileForRemoval && e.dataTransfer) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      }
+    };
+
+    document.addEventListener('drop', handleDocumentDrop);
+    document.addEventListener('dragover', handleDocumentDragOver);
+    return () => {
+      document.removeEventListener('drop', handleDocumentDrop);
+      document.removeEventListener('dragover', handleDocumentDragOver);
+    };
+  }, [draggedTileForRemoval, onTileRemove]);
 
   const isSelected = (x: number, y: number) => {
     return selectedPositions.some(p => p.x === x && p.y === y);
   };
 
-  const isDropZone = (x: number, y: number) => {
-    return y === 0; // Top row is always a drop zone
+  // Helper to get positions between start and end in a straight line
+  const getPositionsBetween = (start: Position, end: Position): Position[] => {
+    const positions: Position[] = [];
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    
+    // Check if it's a valid straight line
+    if (dx !== 0 && dy !== 0 && Math.abs(dx) !== Math.abs(dy)) {
+      return [start]; // Not a straight line, just return start
+    }
+    
+    const steps = Math.max(Math.abs(dx), Math.abs(dy));
+    const stepX = dx === 0 ? 0 : (dx > 0 ? 1 : -1);
+    const stepY = dy === 0 ? 0 : (dy > 0 ? 1 : -1);
+    
+    for (let i = 0; i <= steps; i++) {
+      positions.push({
+        x: start.x + (stepX * i),
+        y: start.y + (stepY * i)
+      });
+    }
+    
+    return positions;
   };
 
-  const handleDragOver = (e: React.DragEvent, column: number) => {
+  const handleMouseDown = (e: React.MouseEvent, x: number, y: number) => {
+    // Only start word selection if clicking on a tile (not empty cell)
+    if (board[y][x] && !isPlacingTiles) {
+      setIsDraggingWord(true);
+      setDragStartPos({ x, y });
+      setDragCurrentPos({ x, y });
+      e.preventDefault();
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent, x: number, y: number) => {
+    if (isDraggingWord && dragStartPos) {
+      setDragCurrentPos({ x, y });
+    }
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (isDraggingWord && dragStartPos && dragCurrentPos && onWordSelect) {
+      const positions = getPositionsBetween(dragStartPos, dragCurrentPos);
+      // Filter to only positions with tiles
+      const validPositions = positions.filter(pos => 
+        pos.x >= 0 && pos.x < 7 && pos.y >= 0 && pos.y < 7 && board[pos.y]?.[pos.x]
+      );
+      
+      if (validPositions.length >= 3 && isValidWordLine(validPositions)) {
+        // Preserve drag direction (start to end, not sorted)
+        onWordSelect(validPositions);
+      }
+      
+      setIsDraggingWord(false);
+      setDragStartPos(null);
+      setDragCurrentPos(null);
+    } else if (isDraggingWord) {
+      // Cancel drag if no valid selection
+      setIsDraggingWord(false);
+      setDragStartPos(null);
+      setDragCurrentPos(null);
+    }
+  };
+
+  // Get currently dragging word positions for visual feedback
+  const getDraggingWordPositions = (): Position[] => {
+    if (!isDraggingWord || !dragStartPos || !dragCurrentPos) {
+      return [];
+    }
+    return getPositionsBetween(dragStartPos, dragCurrentPos).filter(pos => 
+      pos.x >= 0 && pos.x < 7 && pos.y >= 0 && pos.y < 7 && board[pos.y]?.[pos.x]
+    );
+  };
+
+  const handleDragOver = (e: React.DragEvent, x: number, y: number) => {
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
-    setDragOverColumn(column);
+    setDragOverCell({ x, y });
   };
 
-  const handleDragEnter = (e: React.DragEvent, column: number) => {
+  const handleDragEnter = (e: React.DragEvent, x: number, y: number) => {
     e.preventDefault();
     e.stopPropagation();
-    setDragOverColumn(column);
+    setDragOverCell({ x, y });
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // Only clear if we're actually leaving the drop zone
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const x = e.clientX;
     const y = e.clientY;
     if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
-      setDragOverColumn(null);
+      setDragOverCell(null);
     }
   };
 
-  const handleDrop = (e: React.DragEvent, column: number) => {
+  const handleDrop = (e: React.DragEvent, x: number, y: number) => {
     e.preventDefault();
     e.stopPropagation();
-    setDragOverColumn(null);
+    setDragOverCell(null);
+    
+    // Clear dragged tile for removal since we're dropping on the board
+    setDraggedTileForRemoval(null);
+    
     try {
       const data = e.dataTransfer.getData('text/plain');
-      console.log('Drop data:', data); // Debug log
       if (data) {
         const parsed = JSON.parse(data);
-        console.log('Parsed data:', parsed); // Debug log
-        if (onTileDrop && parsed.tile && typeof parsed.index === 'number') {
-          console.log('Calling onTileDrop with:', { column, parsed });
-          onTileDrop(column, parsed);
-        } else {
-          console.warn('Invalid drop data format:', parsed);
+        // Check if this is a tile from the rack (has index and tile)
+        if (parsed.tile && typeof parsed.index === 'number' && onTileDrop) {
+          // Always allow drop - tile will fall to lowest empty cell in column via gravity
+          onTileDrop(x, y, parsed);
         }
-      } else {
-        console.warn('No data in drop event');
+        // If dragging a tile from board to another board position, clear removal flag
+        else if (parsed.fromBoard) {
+          setDraggedTileForRemoval(null);
+        }
       }
     } catch (error) {
       console.error('Error handling drop:', error);
     }
   };
 
-  const getPlayerColor = (playerId: number | undefined): string => {
-    if (playerId === undefined) return '#999';
-    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A'];
-    return colors[playerId] || '#999';
+  const handleTileDragStart = (e: React.DragEvent, x: number, y: number) => {
+    const tile = board[y][x];
+    // Only allow dragging own tiles during own turn
+    if (tile && tile.playerId !== undefined && currentPlayerId !== undefined) {
+      if (tile.playerId !== currentPlayerId) {
+        e.preventDefault();
+        return;
+      }
+    }
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', JSON.stringify({ fromBoard: true, x, y }));
+    setDraggedTilePos({ x, y });
+    setDraggedTileForRemoval({ x, y }); // Track tile being dragged for removal
+  };
+
+  const handleTileDragEnd = (e: React.DragEvent, x: number, y: number) => {
+    // Clear drag state
+    setDraggedTilePos(null);
+    // Note: Removal is handled by document drop handler if dropped outside
+    // If dropped inside board, draggedTileForRemoval will be cleared by drop handler
+    setTimeout(() => {
+      setDraggedTileForRemoval(null);
+    }, 100);
+  };
+
+  const draggingWordPositions = getDraggingWordPositions();
+  const isInDraggingWord = (x: number, y: number) => {
+    return draggingWordPositions.some(p => p.x === x && p.y === y);
   };
 
   return (
     <div className="board-container">
-      <div className="board">
+      <div 
+        className="board"
+        onMouseUp={handleMouseUp}
+        onMouseLeave={() => {
+          // Cancel drag if mouse leaves board
+          if (isDraggingWord) {
+            setIsDraggingWord(false);
+            setDragStartPos(null);
+            setDragCurrentPos(null);
+          }
+        }}
+      >
         {board.map((row, y) =>
           row.map((cell, x) => {
             const tile = cell;
             const selected = isSelected(x, y);
-            const dropZone = isDropZone(x, y);
+            const isDragOver = dragOverCell && dragOverCell.x === x && dragOverCell.y === y;
+            const isEmpty = tile === null;
+            const isTopRow = y === 0;
+            const isInDragSelection = isInDraggingWord(x, y);
             
             return (
               <div
                 key={`${x}-${y}`}
-                className={`cell ${selected ? 'highlighted' : ''} ${dropZone ? 'drop-zone' : ''} ${dropZone && dragOverColumn === x ? 'drag-over' : ''}`}
+                className={`cell ${selected ? 'highlighted' : ''} ${isEmpty && isTopRow ? 'drop-zone' : ''} ${isDragOver ? 'drag-over' : ''} ${tile ? 'has-tile' : ''} ${isInDragSelection ? 'word-selecting' : ''}`}
+                onMouseDown={(e) => handleMouseDown(e, x, y)}
+                onMouseMove={(e) => handleMouseMove(e, x, y)}
                 onClick={() => {
-                  if (dropZone) {
+                  if (isEmpty && isTopRow) {
                     onColumnClick(x);
-                  } else {
-                    onCellClick(x, y);
+                  }
+                  // Don't handle click for word selection - use drag instead
+                }}
+                onDoubleClick={(e) => {
+                  // Double-click to remove tile (only if it's the current player's tile)
+                  e.stopPropagation();
+                  if (tile && tile.playerId === currentPlayerId && onTileRemove) {
+                    console.log('Double-click on cell, removing tile:', { x, y, tile });
+                    onTileRemove(x, y);
                   }
                 }}
-                onDragEnter={dropZone ? (e) => handleDragEnter(e, x) : undefined}
-                onDragOver={dropZone ? (e) => handleDragOver(e, x) : undefined}
-                onDragLeave={dropZone ? (e) => handleDragLeave(e) : undefined}
-                onDrop={dropZone ? (e) => handleDrop(e, x) : undefined}
-                title={dropZone ? `Drop tile here (column ${x + 1})` : tile ? `${tile.letter} (${tile.points} pts)` : `Cell (${x + 1}, ${y + 1})`}
+                onDragEnter={(e) => handleDragEnter(e, x, y)}
+                onDragOver={(e) => handleDragOver(e, x, y)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, x, y)}
+                title={isEmpty && isTopRow ? `Drop tile here (column ${x + 1})` : tile ? `${tile.letter} (${tile.points} pts) - Drag to select word, double-click to remove` : `Cell (${x + 1}, ${y + 1})`}
               >
                 {tile ? (
                   <div 
-                    className="tile"
-                    style={{ borderLeft: `4px solid ${getPlayerColor(tile.playerId)}` }}
+                    className={`tile ${draggedTilePos && draggedTilePos.x === x && draggedTilePos.y === y ? 'dragging' : ''} ${fallingTiles.has(`${x}-${y}`) ? 'falling' : ''} ${tile.playerId === currentPlayerId ? 'removable' : ''}`}
+                    style={{ 
+                      backgroundColor: getPlayerColor(tile.playerId || 0),
+                      color: 'white',
+                      borderLeft: `4px solid ${getPlayerColor(tile.playerId || 0)}`,
+                      ...(fallingTiles.has(`${x}-${y}`) ? {
+                        '--fall-distance': `${y * 100}%`
+                      } as React.CSSProperties : {})
+                    }}
+                    draggable={tile.playerId === currentPlayerId}
+                    onDragStart={(e) => handleTileDragStart(e, x, y)}
+                    onDragEnd={(e) => handleTileDragEnd(e, x, y)}
+                    onClick={(e) => {
+                      // Prevent cell click from firing when clicking on tile
+                      e.stopPropagation();
+                    }}
+                    onDoubleClick={(e) => {
+                      // Double-click tile to remove
+                      e.stopPropagation();
+                      if (tile.playerId === currentPlayerId && onTileRemove) {
+                        console.log('Double-click on tile, removing:', { x, y, tile });
+                        onTileRemove(x, y);
+                      }
+                    }}
                   >
+                    {tile && tile.playerId !== undefined && currentPlayerId !== undefined && tile.playerId === currentPlayerId && onTileRemove && (
+                      <button
+                        className="remove-tile-btn"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          console.log('Remove button clicked, removing tile:', { x, y, tile, playerId: tile.playerId, currentPlayerId });
+                          onTileRemove(x, y);
+                        }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                        }}
+                        title="Remove tile"
+                        aria-label="Remove tile"
+                      >
+                        ×
+                      </button>
+                    )}
                     <div className="letter">{tile.letter}</div>
                     <div className="points">{tile.points}</div>
                   </div>
-                ) : dropZone ? (
+                ) : isEmpty && isTopRow ? (
                   <div className="drop-indicator">↓</div>
                 ) : null}
               </div>

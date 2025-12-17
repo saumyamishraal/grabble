@@ -1,14 +1,18 @@
 import React from 'react';
 import type { Tile } from '../types';
+import { getPlayerColor } from '../utils/playerColors';
 
 interface RackProps {
   tiles: Tile[];
   selectedIndices: number[];
   onTileClick: (index: number) => void;
   onTileDragStart?: (index: number, tile: Tile) => void;
+  playerId?: number;
 }
 
-const Rack: React.FC<RackProps> = ({ tiles, selectedIndices, onTileClick, onTileDragStart }) => {
+const Rack: React.FC<RackProps> = ({ tiles, selectedIndices, onTileClick, onTileDragStart, playerId = 0 }) => {
+  const playerColor = getPlayerColor(playerId);
+  
   const handleDragStart = (e: React.DragEvent, index: number, tile: Tile) => {
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.dropEffect = 'move';
@@ -16,7 +20,6 @@ const Rack: React.FC<RackProps> = ({ tiles, selectedIndices, onTileClick, onTile
     const data = JSON.stringify({ index, tile });
     e.dataTransfer.setData('text/plain', data);
     e.dataTransfer.setData('application/json', data);
-    console.log('Drag start:', { index, tile, data }); // Debug log
     if (onTileDragStart) {
       onTileDragStart(index, tile);
     }
@@ -24,7 +27,7 @@ const Rack: React.FC<RackProps> = ({ tiles, selectedIndices, onTileClick, onTile
 
   return (
     <div className="rack-container">
-      <div className="rack-label">Your Tiles (Drag to top row of board)</div>
+      <div className="rack-label">Your Tiles (Drag anywhere on board)</div>
       <div className="rack">
         {tiles.map((tile, index) => (
           <div
@@ -33,6 +36,10 @@ const Rack: React.FC<RackProps> = ({ tiles, selectedIndices, onTileClick, onTile
             onClick={() => onTileClick(index)}
             draggable={true}
             onDragStart={(e) => handleDragStart(e, index, tile)}
+            style={{
+              backgroundColor: playerColor,
+              color: 'white',
+            }}
           >
             <div className="letter">{tile.letter}</div>
             <div className="points">{tile.points}</div>

@@ -5,8 +5,7 @@ interface ActionButtonsProps {
   onSubmit: () => void;
   onSwap: () => void;
   canSwap: boolean;
-  wordDirection: 'horizontal' | 'vertical' | 'diagonal' | null;
-  onDirectionChange: (direction: 'horizontal' | 'vertical' | 'diagonal' | null) => void;
+  recognizedWords: string[];
   hasWordSelected: boolean;
 }
 
@@ -15,34 +14,16 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
   onSubmit, 
   onSwap, 
   canSwap,
-  wordDirection,
-  onDirectionChange,
+  recognizedWords,
   hasWordSelected
 }) => {
   return (
     <div className="action-buttons">
-      {hasWordSelected && (
-        <div className="word-direction-selector">
-          <label>Word Direction:</label>
-          <div className="direction-buttons">
-            <button
-              className={`direction-btn ${wordDirection === 'horizontal' ? 'active' : ''}`}
-              onClick={() => onDirectionChange('horizontal')}
-            >
-              →
-            </button>
-            <button
-              className={`direction-btn ${wordDirection === 'vertical' ? 'active' : ''}`}
-              onClick={() => onDirectionChange('vertical')}
-            >
-              ↓
-            </button>
-            <button
-              className={`direction-btn ${wordDirection === 'diagonal' ? 'active' : ''}`}
-              onClick={() => onDirectionChange('diagonal')}
-            >
-              ↘
-            </button>
+      {recognizedWords.length > 0 && (
+        <div className="recognized-words">
+          <label>Selected Words:</label>
+          <div className="words-display">
+            {recognizedWords.join(', ').toUpperCase()}
           </div>
         </div>
       )}
@@ -50,7 +31,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
         <button 
           className="btn btn-primary" 
           onClick={onSubmit}
-          disabled={!canSubmit || (hasWordSelected && !wordDirection)}
+          disabled={!canSubmit || !hasWordSelected}
         >
           Submit Move
         </button>

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import './App.css';
 import './styles.scss';
 import { GrabbleEngine } from './game-engine';
 import { GameStateManager } from './game-state-manager';
 import type { Tile, Position, WordClaim, Player, ClaimedWord } from './types';
+import { extractWordFromPositions, isValidWordLine } from './word-detection';
 import SetupModal from './components/SetupModal';
 import Navbar from './components/Navbar';
 import ScoreArea from './components/ScoreArea';
@@ -51,7 +52,7 @@ function App() {
   const [gameManager, setGameManager] = useState<GameStateManager | null>(null);
   const [engine, setEngine] = useState<GrabbleEngine | null>(null);
   const [selectedTiles, setSelectedTiles] = useState<number[]>([]);
-  const [selectedWordPositions, setSelectedWordPositions] = useState<Position[]>([]);
+  const [selectedWords, setSelectedWords] = useState<Position[][]>([]); // Array of word positions (multiple words)
   const [wordDirection, setWordDirection] = useState<'horizontal' | 'vertical' | 'diagonal' | null>(null);
   const [pendingPlacements, setPendingPlacements] = useState<Array<{ column: number; tile: Tile }>>([]);
   const [tilesPlacedThisTurn, setTilesPlacedThisTurn] = useState<Position[]>([]); // Track tiles placed this turn
@@ -60,6 +61,26 @@ function App() {
   const [dictionary, setDictionary] = useState<Set<string>>(new Set());
   const [dictionaryLoaded, setDictionaryLoaded] = useState(false);
   const [renderKey, setRenderKey] = useState(0); // Force re-render
+  const [fallingTiles, setFallingTiles] = useState<Set<string>>(new Set()); // Track tiles with falling animation
+
+  // Extract recognized words from selected positions (preserving drag direction)
+  const recognizedWords = useMemo(() => {
+    if (!gameManager || selectedWords.length === 0) return [];
+    
+    const state = gameManager.getState();
+    return selectedWords
+      .filter(positions => isValidWordLine(positions) && positions.length >= 3)
+      .map(positions => {
+        // Extract word preserving the order of positions (drag direction)
+        return extractWordFromPositions(state.board, positions, true);
+      })
+      .filter(word => word.length >= 3);
+  }, [selectedWords, gameManager]);
+
+  // Get all selected positions flattened for highlighting
+  const selectedWordPositions = useMemo(() => {
+    return selectedWords.flat();
+  }, [selectedWords]);
 
   useEffect(() => {
     loadDictionary().then((dict) => {
@@ -107,13 +128,11 @@ function App() {
     setIsPlacingTiles(true);
   };
 
-  const handleTileDrop = (column: number, tileData: { index: number; tile: Tile }) => {
+  const handleTileDrop = (x: number, y: number, tileData: { index: number; tile: Tile }) => {
     if (!gameManager || !engine) {
       console.warn('Game manager or engine not available');
       return;
     }
-    
-    console.log('handleTileDrop called:', { column, tileData });
     
     const currentPlayer = gameManager.getCurrentPlayer();
     const { index, tile } = tileData;
@@ -131,27 +150,47 @@ function App() {
     }
     
     try {
-      // Place tile immediately on the board
+      // ALWAYS use column placement with gravity, regardless of where tile is dropped
+      // Determine the column based on x coordinate
+      const column = x;
+      
+      // Get state before placement to compare
+      const prevState = engine.getState();
+      
       const placement = { column, tile };
       engine.placeTiles([placement], currentPlayer.id);
       
-      // Remove tile from rack (don't refill - wait until after submit)
-      currentPlayer.rack = currentPlayer.rack.filter((_, i) => i !== index);
-      
-      // Track where tile was placed (after gravity)
+      // Track where tile was placed (after gravity - it falls to the lowest empty cell in the column)
       const state = engine.getState();
       let placedPosition: Position | null = null;
-      for (let y = 6; y >= 0; y--) {
-        const boardTile = state.board[y][column];
-        if (boardTile && boardTile.playerId === currentPlayer.id && boardTile.letter === tile.letter) {
-          placedPosition = { x: column, y };
+      // Find the tile we just placed (it will be at the lowest empty position in the column)
+      // Compare with previous state to find the new tile
+      for (let row = 6; row >= 0; row--) {
+        const boardTile = state.board[row][column];
+        const prevTile = prevState.board[row][column];
+        // If there's a tile now that wasn't there before, or it's a new tile by this player
+        if (boardTile && (!prevTile || (prevTile.playerId !== currentPlayer.id && boardTile.playerId === currentPlayer.id))) {
+          placedPosition = { x: column, y: row };
           break;
         }
       }
       
       if (placedPosition) {
         setTilesPlacedThisTurn(prev => [...prev, placedPosition!]);
+        // Add falling animation
+        setFallingTiles(prev => new Set(prev).add(`${placedPosition!.x}-${placedPosition!.y}`));
+        // Remove animation class after animation completes
+        setTimeout(() => {
+          setFallingTiles(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(`${placedPosition!.x}-${placedPosition!.y}`);
+            return newSet;
+          });
+        }, 500);
       }
+      
+      // Remove tile from rack (don't refill - wait until after submit)
+      currentPlayer.rack = currentPlayer.rack.filter((_, i) => i !== index);
       
       // Clear selections
       setSelectedTiles(prev => prev.filter(i => i !== index));
@@ -159,13 +198,55 @@ function App() {
       setIsPlacingTiles(false);
       
       // Force re-render by updating render key
-      // The state is already updated in the engine, we just need to trigger React re-render
       setRenderKey(prev => prev + 1);
       
-      console.log('Tile placed successfully at:', placedPosition);
+      console.log('Tile placed successfully at:', { x, y });
     } catch (error) {
       console.error('Error placing tile:', error);
       alert(`Error placing tile: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleTileRemove = (x: number, y: number) => {
+    if (!gameManager || !engine) return;
+    
+    const currentPlayer = gameManager.getCurrentPlayer();
+    const state = engine.getState();
+    const tile = state.board[y][x];
+    
+    // Check if tile exists and belongs to current player
+    if (!tile) {
+      return;
+    }
+    
+    if (tile.playerId !== currentPlayer.id) {
+      alert('You can only remove your own tiles.');
+      return;
+    }
+    
+    // Check if it's the current player's turn (can only remove during active turn)
+    if (state.currentPlayerId !== currentPlayer.id) {
+      alert('You can only remove tiles during your turn.');
+      return;
+    }
+    
+    try {
+      const removedTile = engine.removeTile(x, y);
+      if (removedTile) {
+        // Return tile to rack (without playerId)
+        const tileToReturn = { letter: removedTile.letter, points: removedTile.points };
+        currentPlayer.rack.push(tileToReturn);
+        
+        // Remove from tilesPlacedThisTurn if it was placed this turn
+        setTilesPlacedThisTurn(prev => prev.filter(pos => !(pos.x === x && pos.y === y)));
+        
+        // Force re-render
+        setRenderKey(prev => prev + 1);
+        console.log('Tile removed and returned to rack:', { x, y, tile: removedTile });
+      }
+    } catch (error) {
+      console.error('Error removing tile:', error);
+      alert(`Error removing tile: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -188,38 +269,28 @@ function App() {
     return null;
   };
 
-  const handleCellClick = (x: number, y: number) => {
-    if (isPlacingTiles || !gameManager) return;
+  const handleWordSelect = (positions: Position[]) => {
+    if (!gameManager || !engine) return;
     
-    const pos: Position = { x, y };
-    setSelectedWordPositions(prev => {
-      const idx = prev.findIndex(p => p.x === x && p.y === y);
-      if (idx === -1) {
-        const newPositions = [...prev, pos];
-        // Auto-detect direction when 2+ positions selected
-        if (newPositions.length >= 2) {
-          const detected = detectWordDirection(newPositions);
-          if (detected) {
-            setWordDirection(detected);
-          }
-        } else {
-          setWordDirection(null);
-        }
-        return newPositions;
+    // Check if this word is already selected (by comparing position keys)
+    const wordKey = positions.map(p => `${p.x},${p.y}`).sort().join('|');
+    
+    setSelectedWords(prev => {
+      // Check if word already exists
+      const exists = prev.some(word => {
+        const key = word.map(p => `${p.x},${p.y}`).sort().join('|');
+        return key === wordKey;
+      });
+      
+      if (exists) {
+        // Remove if already selected (toggle off)
+        return prev.filter(word => {
+          const key = word.map(p => `${p.x},${p.y}`).sort().join('|');
+          return key !== wordKey;
+        });
       } else {
-        const newPositions = prev.filter((_, i) => i !== idx);
-        // Re-detect direction if positions remain
-        if (newPositions.length >= 2) {
-          const detected = detectWordDirection(newPositions);
-          if (detected) {
-            setWordDirection(detected);
-          } else {
-            setWordDirection(null);
-          }
-        } else {
-          setWordDirection(null);
-        }
-        return newPositions;
+        // Add new word
+        return [...prev, positions];
       }
     });
   };
@@ -232,8 +303,8 @@ function App() {
     // Check if we have tiles placed this turn OR pending placements
     const hasPlacedTiles = tilesPlacedThisTurn.length > 0 || pendingPlacements.length > 0;
     
-    if (!hasPlacedTiles && selectedWordPositions.length === 0) {
-      alert('Please place tiles or select a word before submitting.');
+    if (!hasPlacedTiles && selectedWords.length === 0) {
+      alert('Please place tiles and select at least one word by dragging before submitting.');
       return;
     }
     
@@ -272,7 +343,8 @@ function App() {
       const allNewlyPlacedTiles = [...tilesPlacedThisTurn, ...newlyPlacedFromPending];
       
       console.log('Submit move - tiles placed this turn:', allNewlyPlacedTiles);
-      console.log('Submit move - selected word positions:', selectedWordPositions);
+      console.log('Submit move - selected words:', selectedWords);
+      console.log('Submit move - recognized words:', recognizedWords);
       console.log('Submit move - dictionary size:', dictionary.size, 'dictionary loaded:', dictionaryLoaded);
       
       if (!dictionaryLoaded || dictionary.size === 0) {
@@ -280,44 +352,47 @@ function App() {
         return;
       }
       
-      // Process word claims
-      if (selectedWordPositions.length > 0) {
-        // Require word direction to be selected
-        if (!wordDirection) {
-          alert('Please select word direction (horizontal, vertical, or diagonal) before submitting.');
+      // Require word selection before submitting
+      if (selectedWords.length === 0) {
+        alert('Please select at least one word by dragging from start to finish before submitting.');
+        return;
+      }
+      
+      // Process word claims for all selected words
+      if (selectedWords.length > 0) {
+        // Validate all selected words
+        const validWords = selectedWords.filter(positions => isValidWordLine(positions));
+        
+        if (validWords.length === 0) {
+          alert('Please select valid words (straight lines of 3+ tiles) by dragging.');
           return;
         }
         
-        // Validate that positions match the selected direction
-        const detected = detectWordDirection(selectedWordPositions);
-        if (detected !== wordDirection) {
-          alert(`Selected positions form a ${detected || 'invalid'} line, but you selected ${wordDirection}. Please correct your selection.`);
-          return;
-        }
-        
-        // Check if word contains at least one newly placed tile
+        // Check if at least one word contains a newly placed tile
         if (allNewlyPlacedTiles.length > 0) {
-          const hasNewTile = allNewlyPlacedTiles.some(newPos =>
-            selectedWordPositions.some(pos => pos.x === newPos.x && pos.y === newPos.y)
+          const hasNewTile = validWords.some(wordPositions =>
+            allNewlyPlacedTiles.some(newPos =>
+              wordPositions.some(pos => pos.x === newPos.x && pos.y === newPos.y)
+            )
           );
           
           if (!hasNewTile) {
-            alert('Selected word must contain at least one tile you placed this turn.');
+            alert('At least one selected word must contain a tile you placed this turn.');
             return;
           }
         }
         
-        const claims: WordClaim[] = [{
-          positions: selectedWordPositions,
+        const claims: WordClaim[] = validWords.map(positions => ({
+          positions,
           playerId: currentPlayer.id
-        }];
+        }));
         
         console.log('Processing word claims:', { 
           claims, 
+          recognizedWords,
           newlyPlacedTiles: allNewlyPlacedTiles,
           dictionarySize: dictionary.size,
-          dictionaryLoaded,
-          sampleWords: Array.from(dictionary).slice(0, 5)
+          dictionaryLoaded
         });
         
         if (dictionary.size === 0) {
@@ -335,11 +410,8 @@ function App() {
         }
         
         console.log('Word claims validated successfully! Score:', result.totalScore);
-        setSelectedWordPositions([]);
+        setSelectedWords([]);
         setWordDirection(null);
-      } else if (allNewlyPlacedTiles.length > 0) {
-        // Tiles placed but no word selected - still allow submit (pass turn)
-        console.log('Tiles placed but no word claimed - passing turn');
       }
       
       // Refill rack and advance turn (only after submitting)
@@ -400,13 +472,16 @@ function App() {
     <div className="game-container" key={renderKey}>
       <Navbar currentPlayerName={currentPlayer.name} />
       <ScoreArea players={state.players} currentPlayerId={state.currentPlayerId} />
-      <Board 
+      <Board
         board={state.board}
         selectedPositions={selectedWordPositions}
         isPlacingTiles={isPlacingTiles}
-        onCellClick={handleCellClick}
         onColumnClick={handleColumnClick}
         onTileDrop={handleTileDrop}
+        onTileRemove={handleTileRemove}
+        fallingTiles={fallingTiles}
+        currentPlayerId={currentPlayer.id}
+        onWordSelect={handleWordSelect}
       />
       <Rack 
         tiles={currentPlayer.rack}
@@ -415,15 +490,15 @@ function App() {
         onTileDragStart={(index, tile) => {
           // Optional: visual feedback when dragging starts
         }}
+        playerId={currentPlayer.id}
       />
       <ActionButtons
-        canSubmit={tilesPlacedThisTurn.length > 0 || pendingPlacements.length > 0 || selectedWordPositions.length > 0}
+        canSubmit={tilesPlacedThisTurn.length > 0 || pendingPlacements.length > 0 || selectedWords.length > 0}
         onSubmit={handleSubmitMove}
         onSwap={handleSwapTiles}
         canSwap={selectedTiles.length > 0}
-        wordDirection={wordDirection}
-        onDirectionChange={setWordDirection}
-        hasWordSelected={selectedWordPositions.length > 0}
+        recognizedWords={recognizedWords}
+        hasWordSelected={selectedWords.length > 0}
       />
       <WordsPanel claimedWords={state.claimedWords} />
     </div>

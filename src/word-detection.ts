@@ -112,19 +112,28 @@ export function findAllWords(board: (Tile | null)[][]): Position[][] {
 
 /**
  * Extract word string from board positions
+ * @param preserveOrder - If true, use positions as-is. If false, sort them.
  */
 export function extractWordFromPositions(
     board: (Tile | null)[][],
-    positions: Position[]
+    positions: Position[],
+    preserveOrder: boolean = false
 ): string {
-    // Sort positions to get correct order
-    const sorted = [...positions].sort((a, b) => {
-        if (a.y !== b.y) return a.y - b.y;
-        return a.x - b.x;
-    });
+    let orderedPositions: Position[];
+    
+    if (preserveOrder) {
+        // Use positions as provided (respects drag direction)
+        orderedPositions = positions;
+    } else {
+        // Sort positions to get correct order (top-left to bottom-right)
+        orderedPositions = [...positions].sort((a, b) => {
+            if (a.y !== b.y) return a.y - b.y;
+            return a.x - b.x;
+        });
+    }
 
     const letters: string[] = [];
-    for (const pos of sorted) {
+    for (const pos of orderedPositions) {
         const tile = board[pos.y]?.[pos.x];
         if (tile) {
             letters.push(tile.letter);
