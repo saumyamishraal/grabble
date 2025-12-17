@@ -3,12 +3,12 @@
  */
 
 export const PLAYER_COLORS = [
-  '#FFB3BA', // Pastel Red - Player 1
-  '#BAFFC9', // Pastel Green - Player 2
-  '#BAE1FF', // Pastel Blue - Player 3
-  '#FFFFBA', // Pastel Yellow - Player 4
-  '#FFDFBA', // Pastel Orange - Player 5
-  '#E0BBE4', // Pastel Purple - Player 6
+  '#2196F3', // Blue - Player 1 (Amuse Labs primary blue)
+  '#FF9800', // Orange - Player 2 (Amuse Labs secondary orange)
+  '#4CAF50', // Green - Player 3
+  '#9C27B0', // Purple - Player 4
+  '#F44336', // Red - Player 5
+  '#00BCD4', // Cyan - Player 6
 ];
 
 export function getPlayerColor(playerId: number): string {

@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Player } from '../types';
-import { getPlayerColor } from '../utils/playerColors';
+import { getPlayerColor, getPlayerColorLight } from '../utils/playerColors';
 
 interface ScoreAreaProps {
   players: Player[];
@@ -15,12 +15,18 @@ const ScoreArea: React.FC<ScoreAreaProps> = ({ players, currentPlayerId }) => {
     <div className="score-area">
       {sortedPlayers.map(player => {
         const playerColor = getPlayerColor(player.id);
+        const playerColorLight = getPlayerColorLight(player.id);
+        const isCurrentPlayer = player.id === currentPlayerId;
         return (
           <div 
             key={player.id} 
-            className={`player-score ${player.id === currentPlayerId ? 'current-player' : ''}`}
+            className={`player-score ${isCurrentPlayer ? 'current-player' : ''}`}
             style={{
               borderLeft: `4px solid ${playerColor}`,
+              ...(isCurrentPlayer ? {
+                background: playerColorLight,
+                border: `2px solid ${playerColor}`,
+              } : {})
             }}
           >
             <div 
@@ -29,7 +35,12 @@ const ScoreArea: React.FC<ScoreAreaProps> = ({ players, currentPlayerId }) => {
             >
               {player.name}
             </div>
-            <div className="score-value">{player.score}</div>
+            <div 
+              className="score-value"
+              style={{ color: playerColor, fontWeight: 'bold' }}
+            >
+              {player.score}
+            </div>
           </div>
         );
       })}

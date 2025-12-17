@@ -285,11 +285,16 @@ const Board: React.FC<BoardProps> = ({
               >
                 {tile ? (
                   <div 
-                    className={`tile ${draggedTilePos && draggedTilePos.x === x && draggedTilePos.y === y ? 'dragging' : ''} ${fallingTiles.has(`${x}-${y}`) ? 'falling' : ''} ${tile.playerId === currentPlayerId ? 'removable' : ''}`}
+                    className={`tile ${draggedTilePos && draggedTilePos.x === x && draggedTilePos.y === y ? 'dragging' : ''} ${fallingTiles.has(`${x}-${y}`) ? 'falling' : ''} ${tile.playerId === currentPlayerId ? 'removable' : ''} ${tile.letter === ' ' ? 'blank-tile' : ''}`}
                     style={{ 
                       backgroundColor: getPlayerColor(tile.playerId || 0),
                       color: 'white',
                       borderLeft: `4px solid ${getPlayerColor(tile.playerId || 0)}`,
+                      ...(tile.letter === ' ' ? {
+                        borderTop: '2px dashed rgba(255, 255, 255, 0.6)',
+                        borderRight: '2px dashed rgba(255, 255, 255, 0.6)',
+                        borderBottom: '2px dashed rgba(255, 255, 255, 0.6)',
+                      } : {}),
                       ...(fallingTiles.has(`${x}-${y}`) ? {
                         '--fall-distance': `${y * 100}%`
                       } as React.CSSProperties : {})
@@ -302,9 +307,17 @@ const Board: React.FC<BoardProps> = ({
                       e.stopPropagation();
                     }}
                     onDoubleClick={(e) => {
-                      // Double-click tile to remove (only if placed this turn)
                       e.stopPropagation();
                       const wasPlacedThisTurn = tilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y);
+                      
+                      // If it's a blank tile and editable, open edit modal
+                      if (tile.letter === ' ' && tile.playerId === currentPlayerId && !tile.isBlankLocked && onBlankTileEdit) {
+                        console.log('Double-click on blank tile, editing:', { x, y, tile });
+                        onBlankTileEdit(x, y);
+                        return;
+                      }
+                      
+                      // Otherwise, double-click to remove (only if placed this turn)
                       if (tile.playerId === currentPlayerId && wasPlacedThisTurn && onTileRemove) {
                         console.log('Double-click on tile, removing:', { x, y, tile });
                         onTileRemove(x, y);
@@ -342,12 +355,9 @@ const Board: React.FC<BoardProps> = ({
                     <div 
                       className="letter"
                       onClick={(e) => {
-                        // Allow clicking blank tiles to edit them (if not locked and placed this turn)
+                        // Allow clicking blank tiles to edit them (if not locked and belongs to current player)
                         if (tile.letter === ' ' && onBlankTileEdit) {
-                          const wasPlacedThisTurn = tilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y);
-                          const isEditable = tile.playerId === currentPlayerId && 
-                                           !tile.isBlankLocked && 
-                                           wasPlacedThisTurn;
+                          const isEditable = tile.playerId === currentPlayerId && !tile.isBlankLocked;
                           if (isEditable) {
                             e.stopPropagation();
                             onBlankTileEdit(x, y);
@@ -357,18 +367,20 @@ const Board: React.FC<BoardProps> = ({
                       style={{
                         cursor: (tile.letter === ' ' && 
                                 tile.playerId === currentPlayerId && 
-                                !tile.isBlankLocked && 
-                                tilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y)) 
+                                !tile.isBlankLocked) 
                                 ? 'pointer' : 'default',
-                        textDecoration: (tile.letter === ' ' && tile.blankLetter) ? 'underline' : 'none'
+                        fontWeight: tile.letter === ' ' && tile.blankLetter ? 'bold' : 'normal',
+                        fontSize: tile.letter === ' ' && tile.blankLetter ? '1.1em' : '1em'
                       }}
-                      title={tile.letter === ' ' && tile.playerId === currentPlayerId && !tile.isBlankLocked && tilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y) 
-                        ? 'Click to edit blank tile letter' 
+                      title={tile.letter === ' ' && tile.playerId === currentPlayerId && !tile.isBlankLocked
+                        ? 'Click or double-click to edit blank tile letter' 
                         : tile.letter === ' ' && tile.isBlankLocked 
                         ? `Blank tile (locked as ${tile.blankLetter || '?'})` 
+                        : tile.letter === ' '
+                        ? 'Blank tile'
                         : ''}
                     >
-                      {tile.letter === ' ' ? (tile.blankLetter || '?') : tile.letter}
+                      {tile.letter === ' ' ? (tile.blankLetter ? tile.blankLetter.toUpperCase() : '?') : tile.letter}
                     </div>
                     <div className="points">{tile.points}</div>
                   </div>

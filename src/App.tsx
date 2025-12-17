@@ -274,12 +274,36 @@ function App() {
         currentPlayer.rack.push(tileToReturn);
         
         // Remove from tilesPlacedThisTurn
-        setTilesPlacedThisTurn(prev => prev.filter(pos => !(pos.x === x && pos.y === y)));
+        setTilesPlacedThisTurn(prev => {
+          // After gravity, tiles above the removed tile have moved down
+          // Update positions: tiles in the same column (x) above the removed row (y) move down by 1
+          return prev
+            .filter(pos => !(pos.x === x && pos.y === y)) // Remove the deleted tile
+            .map(pos => {
+              // If tile is in same column and above removed position, it moved down
+              if (pos.x === x && pos.y < y) {
+                return { x: pos.x, y: pos.y + 1 };
+              }
+              return pos;
+            });
+        });
         
         // Also remove any selected words that contain this position
-        setSelectedWords(prev => prev.filter(wordPositions => 
-          !wordPositions.some(pos => pos.x === x && pos.y === y)
-        ));
+        // And update positions in selected words after gravity
+        setSelectedWords(prev => prev
+          .filter(wordPositions => 
+            !wordPositions.some(pos => pos.x === x && pos.y === y)
+          )
+          .map(wordPositions => 
+            wordPositions.map(pos => {
+              // If position is in same column and above removed position, it moved down
+              if (pos.x === x && pos.y < y) {
+                return { x: pos.x, y: pos.y + 1 };
+              }
+              return pos;
+            })
+          )
+        );
         
         // Force re-render
         setRenderKey(prev => prev + 1);
@@ -567,17 +591,26 @@ function App() {
     if (!gameManager || !engine || !blankTileModal.position) return;
     
     const { x, y } = blankTileModal.position;
-    const state = engine.getState();
+    // Access the engine's state directly (not a copy) to update the tile
+    const state = (engine as any).state;
+    if (!state || !state.board || !state.board[y] || !state.board[y][x]) {
+      console.error('Invalid tile position or state');
+      return;
+    }
+    
     const tile = state.board[y][x];
     
     if (tile && tile.letter === ' ') {
-      // Update the blank tile with the letter
-      tile.blankLetter = letter;
+      // Update the blank tile with the letter directly in the engine's state
+      tile.blankLetter = letter.toUpperCase();
       // Don't lock it yet - will be locked after submission
       tile.isBlankLocked = false;
       
       setBlankTileModal({ isOpen: false, position: null, currentLetter: '' });
+      // Force re-render by updating render key and game manager
       setRenderKey(prev => prev + 1);
+      setGameManager(gameManager);
+      setEngine(engine);
     }
   };
 
@@ -621,12 +654,10 @@ function App() {
     // Only allow editing if:
     // 1. It's a blank tile
     // 2. It belongs to current player
-    // 3. It's not locked
-    // 4. It was placed this turn
+    // 3. It's not locked (can edit until turn is submitted)
     if (tile && tile.letter === ' ' && 
         tile.playerId === currentPlayer.id && 
-        !tile.isBlankLocked &&
-        tilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y)) {
+        !tile.isBlankLocked) {
       setBlankTileModal({
         isOpen: true,
         position: { x, y },

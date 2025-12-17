@@ -145,7 +145,18 @@ export function extractWordFromPositions(
         }
     }
 
-    return letters.join('').trim();
+    const result = letters.join('').trim();
+    // Debug: log extraction details for troubleshooting
+    if (result.length > 0 && result.length <= 10) {
+        console.log('extractWordFromPositions:', {
+            preserveOrder,
+            positions: positions.map(p => `(${p.x},${p.y})`),
+            orderedPositions: orderedPositions.map(p => `(${p.x},${p.y})`),
+            letters,
+            result
+        });
+    }
+    return result;
 }
 
 /**
@@ -211,7 +222,12 @@ export function getReverseWord(
         const pos = sorted[i];
         const tile = board[pos.y]?.[pos.x];
         if (tile) {
-            letters.push(tile.letter);
+            // For blank tiles, use blankLetter if available, otherwise use space
+            if (tile.letter === ' ' && tile.blankLetter) {
+                letters.push(tile.blankLetter);
+            } else {
+                letters.push(tile.letter);
+            }
         }
     }
 

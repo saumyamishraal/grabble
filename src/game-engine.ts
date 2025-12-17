@@ -6,7 +6,7 @@
 
 import type { Tile, Position, TilePlacement, WordClaim, ClaimedWord, GameState, Player } from './types';
 import { STANDARD_SCRABBLE_DISTRIBUTION } from './types';
-import { isValidWordLine, extractWordFromPositions, getReverseWord, containsNewTile } from './word-detection';
+import { isValidWordLine, extractWordFromPositions, getReverseWord, containsNewTile, findAllWords } from './word-detection';
 
 /**
  * Core game engine for Grabble
@@ -178,8 +178,10 @@ export class GrabbleEngine {
             }
         }
 
-        const word = extractWordFromPositions(this.state.board, positions);
-        return { word, isValid: word.length >= 3 };
+        // Extract word - sort positions to get correct reading order (top-to-bottom, left-to-right)
+        const word = extractWordFromPositions(this.state.board, positions, false);
+        const trimmedWord = word.trim().toUpperCase();
+        return { word: trimmedWord, isValid: trimmedWord.length >= 3 };
     }
 
     /**
@@ -193,14 +195,22 @@ export class GrabbleEngine {
     /**
      * Check if word is an emordnilap (reverses to a different valid word)
      * Uses the reverse word from board positions to handle multi-character tiles correctly
+     * Both the original word and the reverse word must be valid dictionary words
      */
     async isEmordnilap(word: string, positions: Position[], dictionary: Set<string>): Promise<boolean> {
+        // First verify the original word is in the dictionary (should already be validated, but double-check)
+        const wordUpper = word.toUpperCase();
+        if (!dictionary.has(wordUpper)) {
+            return false;
+        }
+        
         const reverseWord = getReverseWord(this.state.board, positions);
         if (!reverseWord) {
             return false;
         }
         const reverseUpper = reverseWord.toUpperCase();
-        const wordUpper = word.toUpperCase();
+        
+        // Both words must be different and both must be valid dictionary words
         return reverseUpper !== wordUpper && dictionary.has(reverseUpper);
     }
 
@@ -267,9 +277,27 @@ export class GrabbleEngine {
             return { valid: false, error: 'Word must be a straight line of 3+ letters' };
         }
 
-        // Check dictionary
-        if (!dictionary.has(word.toUpperCase())) {
-            return { valid: false, error: 'Word not in dictionary' };
+        // Word is already uppercase from extractWord
+        const wordUpper = word.toUpperCase().trim();
+        console.log('Validating word claim:', {
+            word,
+            wordUpper,
+            wordLength: wordUpper.length,
+            inDictionary: dictionary.has(wordUpper),
+            dictionarySize: dictionary.size,
+            positions: claim.positions,
+            sampleDictWords: Array.from(dictionary).slice(0, 10)
+        });
+
+        // Check dictionary - ensure we're checking the exact uppercase trimmed word
+        if (!dictionary.has(wordUpper)) {
+            // Try to find similar words for debugging
+            const similarWords = Array.from(dictionary).filter(w => 
+                w.length === wordUpper.length && 
+                w.startsWith(wordUpper[0])
+            ).slice(0, 5);
+            console.log('Word not found. Similar words:', similarWords);
+            return { valid: false, error: `Word "${wordUpper}" not in dictionary` };
         }
 
         // Check if word contains at least one newly placed tile
@@ -277,16 +305,70 @@ export class GrabbleEngine {
             return { valid: false, error: 'Word must contain at least one newly placed tile' };
         }
 
-        // Check if word already claimed
+        // Check if word already claimed (exact same positions)
         const wordAlreadyClaimed = this.state.claimedWords.some(cw => {
+            // Check if word text matches
             if (cw.word.toUpperCase() !== word.toUpperCase()) return false;
-            // Check if positions overlap (same word in same location)
-            return cw.positions.some(cwPos =>
-                claim.positions.some(claimPos => cwPos.x === claimPos.x && cwPos.y === claimPos.y)
-            );
+            
+            // Check if positions match exactly (same word in same location)
+            if (cw.positions.length !== claim.positions.length) return false;
+            
+            // Sort positions for comparison
+            const cwPositionsSorted = [...cw.positions].sort((a, b) => {
+                if (a.y !== b.y) return a.y - b.y;
+                return a.x - b.x;
+            });
+            const claimPositionsSorted = [...claim.positions].sort((a, b) => {
+                if (a.y !== b.y) return a.y - b.y;
+                return a.x - b.x;
+            });
+            
+            // Check if all positions match
+            return cwPositionsSorted.every((cwPos, index) => {
+                const claimPos = claimPositionsSorted[index];
+                return cwPos.x === claimPos.x && cwPos.y === claimPos.y;
+            });
         });
         if (wordAlreadyClaimed) {
             return { valid: false, error: 'Word already claimed' };
+        }
+
+        // NEW RULE: Check that ALL words containing newly placed tiles are valid
+        // This prevents claiming "RAIN" when it's part of invalid "ROARAIN"
+        // But allows perpendicular words (like RAIN vertical next to ROAR horizontal)
+        const allWordsOnBoard = findAllWords(this.state.board);
+        const wordsContainingNewTiles = allWordsOnBoard.filter(wordPositions => 
+            containsNewTile(wordPositions, newlyPlacedTiles)
+        );
+
+        // Validate each word that contains newly placed tiles
+        for (const wordPositions of wordsContainingNewTiles) {
+            const { word: boardWord, isValid: boardWordValid } = this.extractWord(wordPositions);
+            if (!boardWordValid || boardWord.length < 3) {
+                continue; // Skip invalid word lines
+            }
+            
+            const boardWordUpper = boardWord.toUpperCase();
+            
+            // Check if this word is in the dictionary
+            if (!dictionary.has(boardWordUpper)) {
+                // Check if this word overlaps with the claimed word positions
+                // If it's the same word being claimed, skip (already validated above)
+                const isClaimedWord = wordPositions.length === claim.positions.length &&
+                    wordPositions.every(wp => 
+                        claim.positions.some(cp => cp.x === wp.x && cp.y === wp.y)
+                    );
+                
+                if (isClaimedWord) {
+                    continue; // This is the word being claimed, already validated
+                }
+                
+                // Found an invalid word containing newly placed tiles
+                return { 
+                    valid: false, 
+                    error: `Cannot claim "${word.toUpperCase()}" because it creates invalid word "${boardWordUpper}"` 
+                };
+            }
         }
 
         // Calculate score
