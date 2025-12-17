@@ -41,7 +41,7 @@ const Rack: React.FC<RackProps> = ({ tiles, selectedIndices, onTileClick, onTile
               color: 'white',
             }}
           >
-            <div className="letter">{tile.letter}</div>
+            <div className="letter">{tile.letter === ' ' ? '?' : tile.letter}</div>
             <div className="points">{tile.points}</div>
           </div>
         ))}

@@ -8,9 +8,11 @@
  * Standard Scrabble tile with letter and point value
  */
 export interface Tile {
-    letter: string;  // Single letter (or blank)
-    points: number;  // Point value (0-10)
+    letter: string;  // Single letter (or blank represented as ' ')
+    points: number;  // Point value (0-10, always 0 for blanks)
     playerId?: number; // Which player placed this tile (for visual ownership)
+    blankLetter?: string; // For blank tiles: the letter it represents (editable until locked)
+    isBlankLocked?: boolean; // Whether the blank letter is locked (after submission)
 }
 
 /**

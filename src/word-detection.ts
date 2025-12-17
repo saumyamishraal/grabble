@@ -136,7 +136,12 @@ export function extractWordFromPositions(
     for (const pos of orderedPositions) {
         const tile = board[pos.y]?.[pos.x];
         if (tile) {
-            letters.push(tile.letter);
+            // For blank tiles, use blankLetter if available, otherwise use space
+            if (tile.letter === ' ' && tile.blankLetter) {
+                letters.push(tile.blankLetter);
+            } else {
+                letters.push(tile.letter);
+            }
         }
     }
 

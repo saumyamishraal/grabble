@@ -14,6 +14,7 @@ interface BoardProps {
   currentPlayerId?: number;
   onWordSelect?: (positions: Position[]) => void;
   tilesPlacedThisTurn?: Position[]; // Tiles placed in current turn (for showing remove button)
+  onBlankTileEdit?: (x: number, y: number) => void; // Handler for editing blank tile letter
 }
 
 const Board: React.FC<BoardProps> = ({ 
@@ -26,7 +27,8 @@ const Board: React.FC<BoardProps> = ({
   fallingTiles = new Set(),
   currentPlayerId,
   onWordSelect,
-  tilesPlacedThisTurn = []
+  tilesPlacedThisTurn = [],
+  onBlankTileEdit
 }) => {
   const [dragOverCell, setDragOverCell] = useState<Position | null>(null);
   const [draggedTilePos, setDraggedTilePos] = useState<Position | null>(null);
@@ -337,7 +339,37 @@ const Board: React.FC<BoardProps> = ({
                         </button>
                       ) : null;
                     })()}
-                    <div className="letter">{tile.letter}</div>
+                    <div 
+                      className="letter"
+                      onClick={(e) => {
+                        // Allow clicking blank tiles to edit them (if not locked and placed this turn)
+                        if (tile.letter === ' ' && onBlankTileEdit) {
+                          const wasPlacedThisTurn = tilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y);
+                          const isEditable = tile.playerId === currentPlayerId && 
+                                           !tile.isBlankLocked && 
+                                           wasPlacedThisTurn;
+                          if (isEditable) {
+                            e.stopPropagation();
+                            onBlankTileEdit(x, y);
+                          }
+                        }
+                      }}
+                      style={{
+                        cursor: (tile.letter === ' ' && 
+                                tile.playerId === currentPlayerId && 
+                                !tile.isBlankLocked && 
+                                tilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y)) 
+                                ? 'pointer' : 'default',
+                        textDecoration: (tile.letter === ' ' && tile.blankLetter) ? 'underline' : 'none'
+                      }}
+                      title={tile.letter === ' ' && tile.playerId === currentPlayerId && !tile.isBlankLocked && tilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y) 
+                        ? 'Click to edit blank tile letter' 
+                        : tile.letter === ' ' && tile.isBlankLocked 
+                        ? `Blank tile (locked as ${tile.blankLetter || '?'})` 
+                        : ''}
+                    >
+                      {tile.letter === ' ' ? (tile.blankLetter || '?') : tile.letter}
+                    </div>
                     <div className="points">{tile.points}</div>
                   </div>
                 ) : isEmpty && isTopRow ? (

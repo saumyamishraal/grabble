@@ -13,6 +13,8 @@ import Rack from './components/Rack';
 import ActionButtons from './components/ActionButtons';
 import WordsPanel from './components/WordsPanel';
 import ErrorModal from './components/ErrorModal';
+import SwapConfirmModal from './components/SwapConfirmModal';
+import BlankTileModal from './components/BlankTileModal';
 
 // Dictionary loading function
 async function loadDictionary(): Promise<Set<string>> {
@@ -64,6 +66,12 @@ function App() {
   const [renderKey, setRenderKey] = useState(0); // Force re-render
   const [fallingTiles, setFallingTiles] = useState<Set<string>>(new Set()); // Track tiles with falling animation
   const [errorModal, setErrorModal] = useState<{ isOpen: boolean; message: string }>({ isOpen: false, message: '' });
+  const [showSwapConfirm, setShowSwapConfirm] = useState(false);
+  const [blankTileModal, setBlankTileModal] = useState<{ isOpen: boolean; position: Position | null; currentLetter: string }>({ 
+    isOpen: false, 
+    position: null, 
+    currentLetter: '' 
+  });
 
   // Helper function to show error modal
   const showError = (message: string) => {
@@ -198,6 +206,16 @@ function App() {
             return newSet;
           });
         }, 500);
+        
+        // If this is a blank tile, show modal to enter letter
+        const placedTile = state.board[placedPosition.y][placedPosition.x];
+        if (placedTile && placedTile.letter === ' ') {
+          setBlankTileModal({
+            isOpen: true,
+            position: placedPosition,
+            currentLetter: placedTile.blankLetter || ''
+          });
+        }
       }
       
       // Remove tile from rack (don't refill - wait until after submit)
@@ -454,6 +472,18 @@ function App() {
         }
         
         console.log('Word claims validated successfully! Score:', result.totalScore);
+        
+        // Lock all blank tiles that were part of the submitted words
+        const stateAfterSubmit = engine.getState();
+        for (const wordPositions of validWords) {
+          for (const pos of wordPositions) {
+            const tile = stateAfterSubmit.board[pos.y][pos.x];
+            if (tile && tile.letter === ' ') {
+              tile.isBlankLocked = true;
+            }
+          }
+        }
+        
         setSelectedWords([]);
         setWordDirection(null);
       }
@@ -485,16 +515,124 @@ function App() {
   };
 
   const handleSwapTiles = () => {
+    if (!gameManager || !engine || selectedTiles.length === 0) {
+      showError('Please select tiles to swap.');
+      return;
+    }
+    
+    // Show confirmation modal
+    setShowSwapConfirm(true);
+  };
+
+  const confirmSwapTiles = () => {
     if (!gameManager || !engine || selectedTiles.length === 0) return;
     
     const currentPlayer = gameManager.getCurrentPlayer();
-    engine.swapTiles(currentPlayer.id, selectedTiles);
-    setSelectedTiles([]);
-    engine.advanceTurn();
     
-    // Force re-render
-    setGameManager(gameManager);
-    setEngine(engine);
+    try {
+      // Perform the swap
+      engine.swapTiles(currentPlayer.id, selectedTiles);
+      
+      // Clear selections
+      setSelectedTiles([]);
+      setShowSwapConfirm(false);
+      
+      // Advance turn (player loses turn for swapping)
+      engine.advanceTurn();
+      
+      // Clear all turn state
+      setSelectedWords([]);
+      setTilesPlacedThisTurn([]);
+      setPendingPlacements([]);
+      
+      // Force re-render
+      setGameManager(gameManager);
+      setEngine(engine);
+      setRenderKey(prev => prev + 1);
+      
+      console.log('Tiles swapped, turn advanced');
+    } catch (error) {
+      console.error('Error swapping tiles:', error);
+      showError(`Error swapping tiles: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setShowSwapConfirm(false);
+    }
+  };
+
+  const cancelSwapTiles = () => {
+    setShowSwapConfirm(false);
+    // Keep tiles selected so user can try again or change selection
+  };
+
+  const handleBlankTileConfirm = (letter: string) => {
+    if (!gameManager || !engine || !blankTileModal.position) return;
+    
+    const { x, y } = blankTileModal.position;
+    const state = engine.getState();
+    const tile = state.board[y][x];
+    
+    if (tile && tile.letter === ' ') {
+      // Update the blank tile with the letter
+      tile.blankLetter = letter;
+      // Don't lock it yet - will be locked after submission
+      tile.isBlankLocked = false;
+      
+      setBlankTileModal({ isOpen: false, position: null, currentLetter: '' });
+      setRenderKey(prev => prev + 1);
+    }
+  };
+
+  const handleBlankTileCancel = () => {
+    // If canceling, remove the blank tile from board and return to rack
+    if (!gameManager || !engine || !blankTileModal.position) {
+      setBlankTileModal({ isOpen: false, position: null, currentLetter: '' });
+      return;
+    }
+    
+    const { x, y } = blankTileModal.position;
+    const currentPlayer = gameManager.getCurrentPlayer();
+    const state = engine.getState();
+    const tile = state.board[y][x];
+    
+    if (tile && tile.letter === ' ' && tile.playerId === currentPlayer.id) {
+      // Remove tile and return to rack
+      const removedTile = engine.removeTile(x, y);
+      if (removedTile) {
+        // Return blank tile to rack (without blankLetter)
+        const tileToReturn = { letter: removedTile.letter, points: removedTile.points };
+        currentPlayer.rack.push(tileToReturn);
+        
+        // Remove from tilesPlacedThisTurn
+        setTilesPlacedThisTurn(prev => prev.filter(pos => !(pos.x === x && pos.y === y)));
+        
+        setRenderKey(prev => prev + 1);
+      }
+    }
+    
+    setBlankTileModal({ isOpen: false, position: null, currentLetter: '' });
+  };
+
+  const handleBlankTileEdit = (x: number, y: number) => {
+    if (!gameManager || !engine) return;
+    
+    const state = engine.getState();
+    const tile = state.board[y][x];
+    const currentPlayer = gameManager.getCurrentPlayer();
+    
+    // Only allow editing if:
+    // 1. It's a blank tile
+    // 2. It belongs to current player
+    // 3. It's not locked
+    // 4. It was placed this turn
+    if (tile && tile.letter === ' ' && 
+        tile.playerId === currentPlayer.id && 
+        !tile.isBlankLocked &&
+        tilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y)) {
+      setBlankTileModal({
+        isOpen: true,
+        position: { x, y },
+        currentLetter: tile.blankLetter || ''
+      });
+    }
   };
 
   if (!dictionaryLoaded) {
@@ -527,6 +665,7 @@ function App() {
         currentPlayerId={currentPlayer.id}
         onWordSelect={handleWordSelect}
         tilesPlacedThisTurn={tilesPlacedThisTurn}
+        onBlankTileEdit={handleBlankTileEdit}
       />
       <Rack 
         tiles={currentPlayer.rack}
@@ -544,6 +683,7 @@ function App() {
         canSwap={selectedTiles.length > 0}
         recognizedWords={recognizedWords}
         hasWordSelected={selectedWords.length > 0}
+        selectedTilesCount={selectedTiles.length}
         onClearSelection={() => {
           setSelectedWords([]);
           setRenderKey(prev => prev + 1);
@@ -554,6 +694,19 @@ function App() {
         isOpen={errorModal.isOpen} 
         message={errorModal.message} 
         onClose={closeErrorModal} 
+      />
+      <SwapConfirmModal
+        isOpen={showSwapConfirm}
+        selectedTiles={selectedTiles.map(index => currentPlayer.rack[index]).filter(Boolean)}
+        onConfirm={confirmSwapTiles}
+        onCancel={cancelSwapTiles}
+      />
+      <BlankTileModal
+        isOpen={blankTileModal.isOpen}
+        position={blankTileModal.position}
+        currentLetter={blankTileModal.currentLetter}
+        onConfirm={handleBlankTileConfirm}
+        onCancel={handleBlankTileCancel}
       />
     </div>
   );

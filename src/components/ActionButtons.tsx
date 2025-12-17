@@ -8,6 +8,7 @@ interface ActionButtonsProps {
   recognizedWords: string[];
   hasWordSelected: boolean;
   onClearSelection?: () => void;
+  selectedTilesCount?: number;
 }
 
 const ActionButtons: React.FC<ActionButtonsProps> = ({ 
@@ -17,7 +18,8 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
   canSwap,
   recognizedWords,
   hasWordSelected,
-  onClearSelection
+  onClearSelection,
+  selectedTilesCount = 0
 }) => {
   return (
     <div className="action-buttons">
@@ -53,8 +55,9 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
           className="btn btn-secondary" 
           onClick={onSwap}
           disabled={!canSwap}
+          title={canSwap ? `Swap ${selectedTilesCount} selected tile${selectedTilesCount !== 1 ? 's' : ''}` : 'Select tiles to swap'}
         >
-          Swap Tiles
+          Swap Tiles {selectedTilesCount > 0 ? `(${selectedTilesCount})` : ''}
         </button>
       </div>
     </div>

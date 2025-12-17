@@ -6,26 +6,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type { GameState } from '../types';
+import type { Room, RoomPlayer, ServerToClientEvents } from '../../server/types';
 
 // Server URL - configurable, or defaults to the same host as the React app but on port 3001
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || `http://${window.location.hostname}:3001`;
 
-interface RoomPlayer {
-    id: string;
-    name: string;
-    isHost: boolean;
-    isReady: boolean;
-    color: string;
-}
-
-interface Room {
-    code: string;
-    players: RoomPlayer[];
-    hostId: string;
-    status: 'waiting' | 'playing' | 'finished';
-    gameState: GameState | null;
-    targetScore: number;
-}
+// Types imported from server/types.ts
 
 interface UseSocketReturn {
     // Connection state
@@ -92,24 +78,26 @@ export function useSocket(): UseSocketReturn {
         });
 
         // Room events
-        socket.on('room_created', ({ roomCode, room }) => {
+        socket.on('room_created', (data: Parameters<ServerToClientEvents['room_created']>[0]) => {
+            const { roomCode, room } = data;
             console.log(`📦 Room created: ${roomCode}`);
             setRoomCode(roomCode);
             setRoom(room);
         });
 
-        socket.on('room_joined', ({ room, playerId }) => {
+        socket.on('room_joined', (data: Parameters<ServerToClientEvents['room_joined']>[0]) => {
+            const { room, playerId } = data;
             console.log(`📦 Joined room: ${room.code}`);
             setRoomCode(room.code);
             setRoom(room);
             setPlayerId(playerId);
         });
 
-        socket.on('room_state', (room) => {
+        socket.on('room_state', (room: Parameters<ServerToClientEvents['room_state']>[0]) => {
             setRoom(room);
         });
 
-        socket.on('player_joined', (player) => {
+        socket.on('player_joined', (player: Parameters<ServerToClientEvents['player_joined']>[0]) => {
             setRoom(prev => {
                 if (!prev) return null;
                 return {
@@ -119,7 +107,7 @@ export function useSocket(): UseSocketReturn {
             });
         });
 
-        socket.on('player_left', (leftPlayerId) => {
+        socket.on('player_left', (leftPlayerId: Parameters<ServerToClientEvents['player_left']>[0]) => {
             setRoom(prev => {
                 if (!prev) return null;
                 return {
@@ -129,7 +117,8 @@ export function useSocket(): UseSocketReturn {
             });
         });
 
-        socket.on('player_ready', ({ playerId, ready }) => {
+        socket.on('player_ready', (data: Parameters<ServerToClientEvents['player_ready']>[0]) => {
+            const { playerId, ready } = data;
             setRoom(prev => {
                 if (!prev) return null;
                 return {
@@ -142,40 +131,46 @@ export function useSocket(): UseSocketReturn {
         });
 
         // Game events
-        socket.on('game_started', (gameState) => {
+        socket.on('game_started', (gameState: Parameters<ServerToClientEvents['game_started']>[0]) => {
             console.log('🎮 Game started');
             setGameState(gameState);
             setRoom(prev => prev ? { ...prev, status: 'playing' } : null);
         });
 
-        socket.on('game_state', (gameState) => {
+        socket.on('game_state', (gameState: Parameters<ServerToClientEvents['game_state']>[0]) => {
             setGameState(gameState);
         });
 
-        socket.on('tiles_placed', ({ gameState }) => {
+        socket.on('tiles_placed', (data: Parameters<ServerToClientEvents['tiles_placed']>[0]) => {
+            const { gameState } = data;
             setGameState(gameState);
         });
 
-        socket.on('words_claimed', ({ gameState }) => {
+        socket.on('words_claimed', (data: Parameters<ServerToClientEvents['words_claimed']>[0]) => {
+            const { gameState } = data;
             setGameState(gameState);
         });
 
-        socket.on('tiles_swapped', ({ gameState }) => {
+        socket.on('tiles_swapped', (data: Parameters<ServerToClientEvents['tiles_swapped']>[0]) => {
+            const { gameState } = data;
             setGameState(gameState);
         });
 
-        socket.on('turn_changed', ({ gameState }) => {
+        socket.on('turn_changed', (data: Parameters<ServerToClientEvents['turn_changed']>[0]) => {
+            const { gameState } = data;
             setGameState(gameState);
         });
 
-        socket.on('game_ended', ({ winnerId, finalState }) => {
+        socket.on('game_ended', (data: Parameters<ServerToClientEvents['game_ended']>[0]) => {
+            const { winnerId, finalState } = data;
             console.log(`🏆 Game ended! Winner: ${winnerId}`);
             setGameState(finalState);
             setRoom(prev => prev ? { ...prev, status: 'finished' } : null);
         });
 
         // Error handling
-        socket.on('error', ({ message }) => {
+        socket.on('error', (data: Parameters<ServerToClientEvents['error']>[0]) => {
+            const { message } = data;
             console.error('❌ Socket error:', message);
             setError(message);
         });
