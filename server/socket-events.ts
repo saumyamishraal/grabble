@@ -62,12 +62,29 @@ export function setupSocketEvents(
          */
         socket.on('join_room', ({ roomCode, playerName }) => {
             try {
-                // Leave any existing room
-                if (socket.data.roomCode) {
+                const targetRoomCode = roomCode.toUpperCase();
+
+                // Check if already in this room
+                if (socket.data.roomCode === targetRoomCode) {
+                    // Update name if changed
+                    const room = roomManager.getRoom(targetRoomCode);
+                    if (room) {
+                        const player = room.players.find(p => p.id === socket.id);
+                        if (player) {
+                            player.name = playerName;
+                            socket.data.playerName = playerName;
+                            socket.emit('room_joined', { room, playerId: socket.id });
+                            return;
+                        }
+                    }
+                }
+
+                // Leave any existing room (if different)
+                if (socket.data.roomCode && socket.data.roomCode !== targetRoomCode) {
                     handleLeaveRoom(socket, io, roomManager);
                 }
 
-                const result = roomManager.joinRoom(roomCode, socket.id, playerName);
+                const result = roomManager.joinRoom(targetRoomCode, socket.id, playerName);
 
                 if (!result.success) {
                     socket.emit('error', { message: result.error || 'Failed to join room' });
