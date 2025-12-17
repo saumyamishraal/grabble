@@ -7,6 +7,7 @@ interface ActionButtonsProps {
   canSwap: boolean;
   recognizedWords: string[];
   hasWordSelected: boolean;
+  onClearSelection?: () => void;
 }
 
 const ActionButtons: React.FC<ActionButtonsProps> = ({ 
@@ -15,13 +16,26 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
   onSwap, 
   canSwap,
   recognizedWords,
-  hasWordSelected
+  hasWordSelected,
+  onClearSelection
 }) => {
   return (
     <div className="action-buttons">
       {recognizedWords.length > 0 && (
         <div className="recognized-words">
-          <label>Selected Words:</label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <label>Selected Words:</label>
+            {onClearSelection && (
+              <button
+                className="btn-clear-selection"
+                onClick={onClearSelection}
+                title="Clear selection"
+                type="button"
+              >
+                Clear
+              </button>
+            )}
+          </div>
           <div className="words-display">
             {recognizedWords.join(', ').toUpperCase()}
           </div>

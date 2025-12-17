@@ -370,6 +370,26 @@ body {
             color: #2196f3;
             min-height: 1.5rem;
         }
+        
+        .btn-clear-selection {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.75rem;
+            background: #ff5252;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            
+            &:hover {
+                background: #d32f2f;
+                transform: scale(1.05);
+            }
+            
+            &:active {
+                transform: scale(0.95);
+            }
+        }
     }
     
     .word-direction-selector {
@@ -482,11 +502,18 @@ body {
             border-radius: 4px;
             font-size: 0.9rem;
             display: flex;
-            justify-content: space-between;
+            gap: 0.5rem;
             align-items: center;
+            flex-wrap: wrap;
+
+            .word-player {
+                font-size: 0.85rem;
+                margin-right: 0.25rem;
+            }
 
             .word-text {
                 font-weight: bold;
+                flex: 1;
             }
 
             .word-score {

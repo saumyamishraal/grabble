@@ -32,14 +32,8 @@ export class GameStateManager {
         // Create tile bag
         const tileBag = GrabbleEngine.createTileBag();
 
-        // Create players with random turn order
-        const turnOrders = [0, 1, 2, 3].slice(0, numPlayers);
-        // Shuffle turn orders
-        for (let i = turnOrders.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [turnOrders[i], turnOrders[j]] = [turnOrders[j], turnOrders[i]];
-        }
-
+        // Create players with sequential turn order (player 1 always goes first)
+        // Player 1 (id: 0) gets turnOrder 0, Player 2 (id: 1) gets turnOrder 1, etc.
         const playerColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A']; // Distinct colors for 4 players
         const players: Player[] = playerNames.map((name, index) => ({
             id: index,
@@ -47,7 +41,7 @@ export class GameStateManager {
             color: playerColors[index],
             score: 0,
             rack: [],
-            turnOrder: turnOrders[index]
+            turnOrder: index // Sequential turn order: 0, 1, 2, 3
         }));
 
         // Deal initial tiles to each player
@@ -59,15 +53,11 @@ export class GameStateManager {
             }
         }
 
-        // Find starting player (lowest turnOrder)
-        const startingPlayer = players.reduce((min, p) => 
-            p.turnOrder < min.turnOrder ? p : min
-        );
-
+        // Always start with player 1 (id: 0)
         const state: GameState = {
             board: GrabbleEngine.createEmptyBoard(),
             players,
-            currentPlayerId: startingPlayer.id,
+            currentPlayerId: 0, // Always start with player 1
             tileBag,
             claimedWords: [],
             targetScore,

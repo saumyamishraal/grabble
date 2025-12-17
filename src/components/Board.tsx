@@ -13,6 +13,7 @@ interface BoardProps {
   fallingTiles?: Set<string>;
   currentPlayerId?: number;
   onWordSelect?: (positions: Position[]) => void;
+  tilesPlacedThisTurn?: Position[]; // Tiles placed in current turn (for showing remove button)
 }
 
 const Board: React.FC<BoardProps> = ({ 
@@ -24,7 +25,8 @@ const Board: React.FC<BoardProps> = ({
   onTileRemove,
   fallingTiles = new Set(),
   currentPlayerId,
-  onWordSelect
+  onWordSelect,
+  tilesPlacedThisTurn = []
 }) => {
   const [dragOverCell, setDragOverCell] = useState<Position | null>(null);
   const [draggedTilePos, setDraggedTilePos] = useState<Position | null>(null);
@@ -298,33 +300,43 @@ const Board: React.FC<BoardProps> = ({
                       e.stopPropagation();
                     }}
                     onDoubleClick={(e) => {
-                      // Double-click tile to remove
+                      // Double-click tile to remove (only if placed this turn)
                       e.stopPropagation();
-                      if (tile.playerId === currentPlayerId && onTileRemove) {
+                      const wasPlacedThisTurn = tilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y);
+                      if (tile.playerId === currentPlayerId && wasPlacedThisTurn && onTileRemove) {
                         console.log('Double-click on tile, removing:', { x, y, tile });
                         onTileRemove(x, y);
                       }
                     }}
                   >
-                    {tile && tile.playerId !== undefined && currentPlayerId !== undefined && tile.playerId === currentPlayerId && onTileRemove && (
-                      <button
-                        className="remove-tile-btn"
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          console.log('Remove button clicked, removing tile:', { x, y, tile, playerId: tile.playerId, currentPlayerId });
-                          onTileRemove(x, y);
-                        }}
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                        }}
-                        title="Remove tile"
-                        aria-label="Remove tile"
-                      >
-                        ×
-                      </button>
-                    )}
+                    {(() => {
+                      // Only show remove button if:
+                      // 1. Tile belongs to current player
+                      // 2. Tile was placed in this turn
+                      const isCurrentPlayerTile = tile && tile.playerId !== undefined && currentPlayerId !== undefined && tile.playerId === currentPlayerId;
+                      const wasPlacedThisTurn = tilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y);
+                      const shouldShowRemoveButton = isCurrentPlayerTile && wasPlacedThisTurn && onTileRemove;
+                      
+                      return shouldShowRemoveButton ? (
+                        <button
+                          className="remove-tile-btn"
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            console.log('Remove button clicked, removing tile:', { x, y, tile, playerId: tile.playerId, currentPlayerId });
+                            onTileRemove(x, y);
+                          }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                          }}
+                          title="Remove tile"
+                          aria-label="Remove tile"
+                        >
+                          ×
+                        </button>
+                      ) : null;
+                    })()}
                     <div className="letter">{tile.letter}</div>
                     <div className="points">{tile.points}</div>
                   </div>

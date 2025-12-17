@@ -12,6 +12,7 @@ import Board from './components/Board';
 import Rack from './components/Rack';
 import ActionButtons from './components/ActionButtons';
 import WordsPanel from './components/WordsPanel';
+import ErrorModal from './components/ErrorModal';
 
 // Dictionary loading function
 async function loadDictionary(): Promise<Set<string>> {
@@ -62,6 +63,16 @@ function App() {
   const [dictionaryLoaded, setDictionaryLoaded] = useState(false);
   const [renderKey, setRenderKey] = useState(0); // Force re-render
   const [fallingTiles, setFallingTiles] = useState<Set<string>>(new Set()); // Track tiles with falling animation
+  const [errorModal, setErrorModal] = useState<{ isOpen: boolean; message: string }>({ isOpen: false, message: '' });
+
+  // Helper function to show error modal
+  const showError = (message: string) => {
+    setErrorModal({ isOpen: true, message });
+  };
+
+  const closeErrorModal = () => {
+    setErrorModal({ isOpen: false, message: '' });
+  };
 
   // Extract recognized words from selected positions (preserving drag direction)
   const recognizedWords = useMemo(() => {
@@ -203,7 +214,7 @@ function App() {
       console.log('Tile placed successfully at:', { x, y });
     } catch (error) {
       console.error('Error placing tile:', error);
-      alert(`Error placing tile: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError(`Error placing tile: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -220,13 +231,20 @@ function App() {
     }
     
     if (tile.playerId !== currentPlayer.id) {
-      alert('You can only remove your own tiles.');
+      showError('You can only remove your own tiles.');
       return;
     }
     
     // Check if it's the current player's turn (can only remove during active turn)
     if (state.currentPlayerId !== currentPlayer.id) {
-      alert('You can only remove tiles during your turn.');
+      showError('You can only remove tiles during your turn.');
+      return;
+    }
+    
+    // Check if this tile was placed in the current turn
+    const wasPlacedThisTurn = tilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y);
+    if (!wasPlacedThisTurn) {
+      // Don't show error - the X button shouldn't be visible for tiles from previous turns
       return;
     }
     
@@ -237,8 +255,13 @@ function App() {
         const tileToReturn = { letter: removedTile.letter, points: removedTile.points };
         currentPlayer.rack.push(tileToReturn);
         
-        // Remove from tilesPlacedThisTurn if it was placed this turn
+        // Remove from tilesPlacedThisTurn
         setTilesPlacedThisTurn(prev => prev.filter(pos => !(pos.x === x && pos.y === y)));
+        
+        // Also remove any selected words that contain this position
+        setSelectedWords(prev => prev.filter(wordPositions => 
+          !wordPositions.some(pos => pos.x === x && pos.y === y)
+        ));
         
         // Force re-render
         setRenderKey(prev => prev + 1);
@@ -246,7 +269,7 @@ function App() {
       }
     } catch (error) {
       console.error('Error removing tile:', error);
-      alert(`Error removing tile: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError(`Error removing tile: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -304,7 +327,7 @@ function App() {
     const hasPlacedTiles = tilesPlacedThisTurn.length > 0 || pendingPlacements.length > 0;
     
     if (!hasPlacedTiles && selectedWords.length === 0) {
-      alert('Please place tiles and select at least one word by dragging before submitting.');
+      showError('Please place tiles and select at least one word by dragging before submitting.');
       return;
     }
     
@@ -348,13 +371,13 @@ function App() {
       console.log('Submit move - dictionary size:', dictionary.size, 'dictionary loaded:', dictionaryLoaded);
       
       if (!dictionaryLoaded || dictionary.size === 0) {
-        alert('Dictionary is still loading. Please wait...');
+        showError('Dictionary is still loading. Please wait...');
         return;
       }
       
       // Require word selection before submitting
       if (selectedWords.length === 0) {
-        alert('Please select at least one word by dragging from start to finish before submitting.');
+        showError('Please select at least one word by dragging from start to finish before submitting.');
         return;
       }
       
@@ -364,7 +387,7 @@ function App() {
         const validWords = selectedWords.filter(positions => isValidWordLine(positions));
         
         if (validWords.length === 0) {
-          alert('Please select valid words (straight lines of 3+ tiles) by dragging.');
+          showError('Please select valid words (straight lines of 3+ tiles) by dragging.');
           return;
         }
         
@@ -377,7 +400,28 @@ function App() {
           );
           
           if (!hasNewTile) {
-            alert('At least one selected word must contain a tile you placed this turn.');
+            showError('At least one selected word must contain a tile you placed this turn.');
+            return;
+          }
+          
+          // NEW RULE: All placed tiles must be part of at least one selected word
+          const allPlacedTilesInWords = allNewlyPlacedTiles.every(placedPos =>
+            validWords.some(wordPositions =>
+              wordPositions.some(pos => pos.x === placedPos.x && pos.y === placedPos.y)
+            )
+          );
+          
+          if (!allPlacedTilesInWords) {
+            const unclaimedTiles = allNewlyPlacedTiles.filter(placedPos =>
+              !validWords.some(wordPositions =>
+                wordPositions.some(pos => pos.x === placedPos.x && pos.y === placedPos.y)
+              )
+            );
+            const unclaimedLetters = unclaimedTiles.map(pos => {
+              const tile = state.board[pos.y][pos.x];
+              return tile ? tile.letter : '?';
+            }).join(', ');
+            showError(`All tiles placed this turn must be part of a selected word. The following tiles are not part of any selected word: ${unclaimedLetters.toUpperCase()}`);
             return;
           }
         }
@@ -396,7 +440,7 @@ function App() {
         });
         
         if (dictionary.size === 0) {
-          alert('Dictionary not loaded yet. Please wait...');
+          showError('Dictionary not loaded yet. Please wait...');
           return;
         }
         
@@ -405,7 +449,7 @@ function App() {
         console.log('Word claims result:', result);
         
         if (!result.valid) {
-          alert('Invalid word claims: ' + result.results.map(r => r.error).join(', '));
+          showError('Invalid word claims: ' + result.results.map(r => r.error).join(', '));
           return;
         }
         
@@ -428,7 +472,7 @@ function App() {
       const winnerId = engine.checkWinCondition();
       if (winnerId !== null) {
         const winner = gameManager.getPlayer(winnerId);
-        alert(`Game Over! ${winner?.name} wins with ${winner?.score} points!`);
+        showError(`Game Over! ${winner?.name} wins with ${winner?.score} points!`);
       }
       
       // Force re-render by updating render key
@@ -436,7 +480,7 @@ function App() {
       
     } catch (error) {
       console.error('Error submitting move:', error);
-      alert('Error: ' + (error as Error).message);
+      showError('Error: ' + (error as Error).message);
     }
   };
 
@@ -482,6 +526,7 @@ function App() {
         fallingTiles={fallingTiles}
         currentPlayerId={currentPlayer.id}
         onWordSelect={handleWordSelect}
+        tilesPlacedThisTurn={tilesPlacedThisTurn}
       />
       <Rack 
         tiles={currentPlayer.rack}
@@ -499,8 +544,17 @@ function App() {
         canSwap={selectedTiles.length > 0}
         recognizedWords={recognizedWords}
         hasWordSelected={selectedWords.length > 0}
+        onClearSelection={() => {
+          setSelectedWords([]);
+          setRenderKey(prev => prev + 1);
+        }}
       />
-      <WordsPanel claimedWords={state.claimedWords} />
+      <WordsPanel claimedWords={state.claimedWords} players={state.players} />
+      <ErrorModal 
+        isOpen={errorModal.isOpen} 
+        message={errorModal.message} 
+        onClose={closeErrorModal} 
+      />
     </div>
   );
 }
