@@ -75,7 +75,7 @@ export class GrabbleEngine {
             if (column < 0 || column >= 7) {
                 throw new Error(`Invalid column: ${column}`);
             }
-            
+
             // Find first empty cell in column (starting from top)
             let placed = false;
             for (let row = 0; row < 7; row++) {
@@ -88,7 +88,7 @@ export class GrabbleEngine {
                     break;
                 }
             }
-            
+
             if (!placed) {
                 throw new Error(`Column ${column} is full`);
             }
@@ -394,7 +394,7 @@ export class GrabbleEngine {
         const currentTurnOrder = currentPlayer.turnOrder;
         const nextTurnOrder = (currentTurnOrder + 1) % this.state.players.length;
         const nextPlayer = this.state.players.find(p => p.turnOrder === nextTurnOrder);
-        
+
         if (nextPlayer) {
             this.state.currentPlayerId = nextPlayer.id;
         }
@@ -427,5 +427,60 @@ export class GrabbleEngine {
             }
         }
         return true;
+    }
+
+    /**
+     * Remove specific tiles from player's rack by index
+     * Returns the removed tiles
+     */
+    removeTilesFromRack(playerId: number, indices: number[]): Tile[] {
+        const player = this.state.players.find(p => p.id === playerId);
+        if (!player) {
+            throw new Error(`Player ${playerId} not found`);
+        }
+
+        const sortedIndices = [...indices].sort((a, b) => b - a);
+        const removedTiles: Tile[] = [];
+
+        for (const index of sortedIndices) {
+            if (index >= 0 && index < player.rack.length) {
+                removedTiles.push(player.rack[index]);
+                player.rack.splice(index, 1);
+            }
+        }
+
+        return removedTiles.reverse();
+    }
+
+    /**
+     * Return a single tile to player's rack
+     */
+    returnTileToRack(playerId: number, tile: Tile): void {
+        const player = this.state.players.find(p => p.id === playerId);
+        if (!player) {
+            throw new Error(`Player ${playerId} not found`);
+        }
+        player.rack.push(tile);
+    }
+
+    /**
+     * Set the letter for a blank tile on the board
+     */
+    setBlankTileLetter(x: number, y: number, letter: string, playerId: number): boolean {
+        if (x < 0 || x >= 7 || y < 0 || y >= 7) return false;
+
+        const tile = this.state.board[y][x];
+
+        if (tile &&
+            tile.letter === ' ' &&
+            tile.isBlank &&
+            tile.playerId === playerId &&
+            !tile.isBlankLocked) {
+            tile.blankLetter = letter.toUpperCase();
+            tile.isBlankLocked = true;
+            return true;
+        }
+
+        return false;
     }
 }

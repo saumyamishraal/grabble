@@ -18,7 +18,7 @@ interface LobbyScreenProps {
     playerId: string | null;
 
     // Actions
-    createRoom: (playerName: string, targetScore?: number) => void;
+    createRoom: (playerName: string, targetScore?: number, hintsEnabled?: boolean) => void;
     joinRoom: (roomCode: string, playerName: string) => void;
     leaveRoom: () => void;
     setReady: (ready: boolean) => void;
@@ -47,6 +47,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
     const [playerName, setPlayerName] = useState('');
     const [targetScore, setTargetScore] = useState(100);
     const [joinCode, setJoinCode] = useState('');
+    const [hintsEnabled, setHintsEnabled] = useState(true);
 
     // If in a room, show waiting room
     if (roomCode && room) {
@@ -199,7 +200,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
         const handleCreate = (e: React.FormEvent) => {
             e.preventDefault();
             if (playerName.trim()) {
-                createRoom(playerName.trim(), targetScore);
+                createRoom(playerName.trim(), targetScore, hintsEnabled);
             }
         };
 
@@ -230,6 +231,17 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
                                 min="50"
                                 max="500"
                             />
+                        </div>
+
+                        <div className="form-group form-checkbox">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    checked={hintsEnabled}
+                                    onChange={(e) => setHintsEnabled(e.target.checked)}
+                                />
+                                Enable Hints
+                            </label>
                         </div>
 
                         <div className="form-actions">

@@ -51,7 +51,7 @@ interface UseSocketReturn {
     // Error handling
     error: string | null;
     clearError: () => void;
-    
+
     // New game request state
     newGameRequest: { requesterId: string; requesterName: string } | null;
     newGameDeclined: { playerName: string } | null;
@@ -59,7 +59,7 @@ interface UseSocketReturn {
     clearNewGameDeclined: () => void;
 
     // Room actions
-    createRoom: (playerName: string, targetScore?: number) => void;
+    createRoom: (playerName: string, targetScore?: number, hintsEnabled?: boolean) => void;
     joinRoom: (roomCode: string, playerName: string) => void;
     leaveRoom: () => void;
     setReady: (ready: boolean) => void;
@@ -322,8 +322,8 @@ export function useSocket(): UseSocketReturn {
     const isHost = room?.hostId === playerId;
 
     // Actions
-    const createRoom = useCallback((playerName: string, targetScore = 100) => {
-        socketRef.current?.emit('create_room', { playerName, targetScore });
+    const createRoom = useCallback((playerName: string, targetScore = 100, hintsEnabled = true) => {
+        socketRef.current?.emit('create_room', { playerName, targetScore, hintsEnabled });
     }, []);
 
     const joinRoom = useCallback((code: string, playerName: string) => {

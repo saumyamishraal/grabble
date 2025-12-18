@@ -572,9 +572,14 @@ function App() {
     }
   }, [isMultiplayer, socketGameState?.currentPlayerId, room, playerId]);
 
-  const handleStartGame = (numPlayers: number, playerNames: string[], targetScore: number) => {
+  const handleStartGame = (numPlayers: number, playerNames: string[], targetScore: number, hintsEnabled: boolean = true) => {
     const manager = GameStateManager.createNewGame(numPlayers, playerNames, targetScore);
     const gameEngine = manager.getEngine();
+
+    // Set hints enabled state
+    const state = manager.getState();
+    state.hintsEnabled = hintsEnabled;
+
     setGameManager(manager);
     setEngine(gameEngine);
     setShowSetup(false);
@@ -640,7 +645,13 @@ function App() {
           setHintedColumns([]);
           break;
         case 1:
-          setHintMessage('💡 Highlighted tile(s) can form a word.');
+          // Show number of tiles needed (depth indicator)
+          const tileCount = result.usefulTiles?.length || 1;
+          if (tileCount === 2) {
+            setHintMessage('💡 Highlighted tiles can form a word together (2-tile move).');
+          } else {
+            setHintMessage('💡 Highlighted tile can form a word.');
+          }
           break;
         case 2:
           // Partial word hint (less obvious)
@@ -652,11 +663,20 @@ function App() {
           break;
         case 3:
           // Column hint (penultimate - most helpful before full reveal)
-          setHintMessage(`📍 Place highlighted tile in column ${(result.targetColumns?.[0] ?? 0) + 1}`);
+          if (result.targetColumns && result.targetColumns.length >= 2) {
+            setHintMessage(`📍 Place tiles in columns ${result.targetColumns[0] + 1} and ${result.targetColumns[1] + 1}`);
+          } else {
+            setHintMessage(`📍 Place highlighted tile in column ${(result.targetColumns?.[0] ?? 0) + 1}`);
+          }
           break;
         case 4:
           if (result.fullSolution) {
-            setHintMessage(`🎯 Word: ${result.fullSolution.word} (Column ${result.fullSolution.column + 1})`);
+            const sol = result.fullSolution;
+            if (sol.depth === 2) {
+              setHintMessage(`🎯 Word: ${sol.word} (Columns ${sol.columns[0] + 1}, ${sol.columns[1] + 1})`);
+            } else {
+              setHintMessage(`🎯 Word: ${sol.word} (Column ${sol.column + 1})`);
+            }
           }
           break;
       }
@@ -2018,7 +2038,11 @@ function App() {
             setSelectedWords([]);
             setRenderKey(prev => prev + 1);
           }}
-          onHint={handleHint}
+          onHint={
+            isMultiplayer
+              ? (room?.hintsEnabled !== false ? handleHint : undefined)
+              : (engine?.getState().hintsEnabled !== false ? handleHint : undefined)
+          }
           hintLevel={hintLevel}
           canHint={isMyTurn && trie !== null}
           hintMessage={hintMessage}

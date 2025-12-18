@@ -46,12 +46,20 @@ const ALL_DIRECTIONS: Direction[] = [
  * Solution found by hint algorithm
  */
 export interface HintSolution {
-    tileIndex: number;      // Which rack tile to use
-    column: number;         // Which column to drop it in
+    // For backward compatibility (depth 1)
+    tileIndex: number;      // First rack tile to use
+    column: number;         // First column to drop it in
+
+    // For depth 2 solutions
+    tileIndices: number[];  // All rack tiles to use (1 or 2)
+    columns: number[];      // All columns to drop tiles in
+    depth: 1 | 2;           // Solution depth
+
     word: string;           // Resulting word
     positions: Position[];  // Word positions on board
     direction: Direction;   // Direction of word
     blankLetter?: string;   // If blank tile, which letter it represents
+    blankLetters?: string[]; // For multi-blank scenarios
 }
 
 /**
@@ -397,6 +405,9 @@ export function findFirstValidWord(
                     return {
                         tileIndex,
                         column,
+                        tileIndices: [tileIndex],
+                        columns: [column],
+                        depth: 1,
                         word,
                         positions,
                         direction
@@ -415,6 +426,9 @@ export function findFirstValidWord(
                     return {
                         tileIndex,
                         column,
+                        tileIndices: [tileIndex],
+                        columns: [column],
+                        depth: 1,
                         word: result.word,
                         positions: result.positions,
                         direction,
@@ -425,7 +439,98 @@ export function findFirstValidWord(
         }
     }
 
+    // PASS 3: Try depth-2 search (2 tiles) if no single-tile solution found
+    const depth2Result = findFirstValidWordDepth2(board, rack, trie);
+    if (depth2Result) {
+        return depth2Result;
+    }
+
     return null;  // No valid words found
+}
+
+/**
+ * Find the first valid word that can be formed by placing 2 tiles
+ * Fallback when single-tile search fails
+ */
+function findFirstValidWordDepth2(
+    board: (Tile | null)[][],
+    rack: Tile[],
+    trie: Trie
+): HintSolution | null {
+    const accessible = getAccessiblePositions(board);
+    if (accessible.length === 0 || rack.length < 2) return null;
+
+    // Try all combinations of 2 tiles in different columns
+    for (let i = 0; i < rack.length; i++) {
+        const tile1 = rack[i];
+        if (tile1.letter === ' ') continue; // Skip blanks for now (simpler)
+
+        for (const { column: col1 } of accessible) {
+            const board1 = simulatePlacement(board, col1, tile1);
+            const landing1 = getLandingRow(board, col1);
+            if (landing1 < 0) continue;
+
+            // Get accessible positions after first placement
+            const accessible2 = getAccessiblePositions(board1);
+
+            for (let j = 0; j < rack.length; j++) {
+                if (j === i) continue; // Can't use same tile twice
+                const tile2 = rack[j];
+                if (tile2.letter === ' ') continue; // Skip blanks for now
+
+                for (const { column: col2 } of accessible2) {
+                    const board2 = simulatePlacement(board1, col2, tile2);
+                    const landing2 = getLandingRow(board1, col2);
+                    if (landing2 < 0) continue;
+
+                    // Check all directions from both new tile positions
+                    for (const direction of ALL_DIRECTIONS) {
+                        // Check word through tile1's position
+                        const result1 = extractWordInDirection(
+                            board2, col1, landing1,
+                            direction.dx, direction.dy
+                        );
+                        if (result1.word.length >= 3 &&
+                            !result1.word.includes('?') &&
+                            trie.hasWord(result1.word)) {
+                            return {
+                                tileIndex: i,
+                                column: col1,
+                                tileIndices: [i, j],
+                                columns: [col1, col2],
+                                depth: 2,
+                                word: result1.word,
+                                positions: result1.positions,
+                                direction
+                            };
+                        }
+
+                        // Check word through tile2's position
+                        const result2 = extractWordInDirection(
+                            board2, col2, landing2,
+                            direction.dx, direction.dy
+                        );
+                        if (result2.word.length >= 3 &&
+                            !result2.word.includes('?') &&
+                            trie.hasWord(result2.word)) {
+                            return {
+                                tileIndex: i,
+                                column: col1,
+                                tileIndices: [i, j],
+                                columns: [col1, col2],
+                                depth: 2,
+                                word: result2.word,
+                                positions: result2.positions,
+                                direction
+                            };
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return null;
 }
 
 /**
@@ -514,7 +619,7 @@ export function getHintAtLevel(
             return {
                 level,
                 hasMoves: true,
-                usefulTiles: [solution.tileIndex]
+                usefulTiles: solution.tileIndices  // Use array for depth-2
             };
 
         case 2:
@@ -522,7 +627,7 @@ export function getHintAtLevel(
             return {
                 level,
                 hasMoves: true,
-                usefulTiles: [solution.tileIndex],
+                usefulTiles: solution.tileIndices,
                 partialWord: solution.word[0] + '_'.repeat(solution.word.length - 1),
                 wordLength: solution.word.length
             };
@@ -532,8 +637,8 @@ export function getHintAtLevel(
             return {
                 level,
                 hasMoves: true,
-                usefulTiles: [solution.tileIndex],
-                targetColumns: [solution.column],
+                usefulTiles: solution.tileIndices,
+                targetColumns: solution.columns,
                 partialWord: solution.word[0] + '_'.repeat(solution.word.length - 1),
                 wordLength: solution.word.length
             };
@@ -542,8 +647,8 @@ export function getHintAtLevel(
             return {
                 level,
                 hasMoves: true,
-                usefulTiles: [solution.tileIndex],
-                targetColumns: [solution.column],
+                usefulTiles: solution.tileIndices,
+                targetColumns: solution.columns,
                 partialWord: solution.word[0] + '_'.repeat(solution.word.length - 1),
                 wordLength: solution.word.length,
                 fullSolution: solution

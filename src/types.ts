@@ -13,6 +13,7 @@ export interface Tile {
     playerId?: number; // Which player placed this tile (for visual ownership)
     blankLetter?: string; // Letter assigned to blank tile (if letter === ' ')
     isBlankLocked?: boolean; // Whether blank tile letter is locked (cannot be changed)
+    isBlank?: boolean; // Basic flag for logic
 }
 
 /**
@@ -74,6 +75,7 @@ export interface GameState {
     targetScore: number;        // Win condition (default 100)
     gameStatus: 'waiting' | 'playing' | 'finished';
     winnerId?: number;           // Winner ID if game finished
+    hintsEnabled?: boolean;      // Whether hints are allowed in this game
 }
 
 /**

@@ -26,7 +26,7 @@ export class RoomManager {
     /**
      * Create a new room
      */
-    createRoom(hostSocketId: string, hostName: string, targetScore: number = 100): Room {
+    createRoom(hostSocketId: string, hostName: string, targetScore: number = 100, hintsEnabled: boolean = true): Room {
         // Generate unique room code
         let code: string;
         do {
@@ -49,7 +49,8 @@ export class RoomManager {
             gameState: null,
             createdAt: new Date(),
             maxPlayers: 4,
-            targetScore
+            targetScore,
+            hintsEnabled
         };
 
         this.rooms.set(code, room);

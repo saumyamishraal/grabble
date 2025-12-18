@@ -52,14 +52,14 @@ export function setupSocketEvents(
         /**
          * Create a new room
          */
-        socket.on('create_room', ({ playerName, targetScore = 100 }) => {
+        socket.on('create_room', ({ playerName, targetScore = 100, hintsEnabled = true }) => {
             try {
                 // Leave any existing room
                 if (socket.data.roomCode) {
                     handleLeaveRoom(socket, io, roomManager);
                 }
 
-                const room = roomManager.createRoom(socket.id, playerName, targetScore);
+                const room = roomManager.createRoom(socket.id, playerName, targetScore, hintsEnabled);
                 socket.data.playerName = playerName;
                 socket.data.roomCode = room.code;
 
@@ -350,7 +350,7 @@ export function setupSocketEvents(
                     const errorMessages = result.results
                         .map(r => r.error)
                         .filter((error): error is string => error !== undefined && error.length > 0);
-                    
+
                     if (errorMessages.length > 0) {
                         socket.emit('error', { message: 'Invalid word claims: ' + errorMessages.join('. ') });
                     } else {
@@ -568,7 +568,7 @@ export function setupSocketEvents(
                     socket.emit('error', { message: 'You can only remove tiles placed this turn' });
                     return;
                 }
-                
+
                 console.log(`✅ Validation passed, removing tile at (${column}, ${row})`);
 
                 // Remove the tile
@@ -814,7 +814,7 @@ export function setupSocketEvents(
         socket.on('disconnect', () => {
             console.log(`🔌 Client disconnected: ${socket.id}`);
             const roomCode = socket.data.roomCode;
-            
+
             // Clear any pending new game request if requester disconnects
             if (roomCode) {
                 const request = newGameRequests.get(roomCode);
@@ -822,7 +822,7 @@ export function setupSocketEvents(
                     newGameRequests.delete(roomCode);
                 }
             }
-            
+
             handleLeaveRoom(socket, io, roomManager);
         });
     });

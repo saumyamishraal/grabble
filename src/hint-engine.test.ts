@@ -259,6 +259,9 @@ describe('getHintAtLevel', () => {
     const mockSolution = {
         tileIndex: 2,
         column: 3,
+        tileIndices: [2],
+        columns: [3],
+        depth: 1 as const,
         word: 'CAT',
         positions: [{ x: 3, y: 6 }, { x: 3, y: 5 }, { x: 3, y: 4 }],
         direction: { dx: 0, dy: -1, name: 'up' }

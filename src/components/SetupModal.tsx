@@ -2,17 +2,18 @@ import React, { useState } from 'react';
 import type { Player } from '../types';
 
 interface SetupModalProps {
-  onStartGame: (numPlayers: number, playerNames: string[], targetScore: number) => void;
+  onStartGame: (numPlayers: number, playerNames: string[], targetScore: number, hintsEnabled: boolean) => void;
 }
 
 const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
   const [numPlayers, setNumPlayers] = useState(2);
   const [playerNames, setPlayerNames] = useState<string[]>(['Player 1', 'Player 2']);
   const [targetScore, setTargetScore] = useState(100);
+  const [hintsEnabled, setHintsEnabled] = useState(true);
 
   const handleNumPlayersChange = (value: number) => {
     setNumPlayers(value);
-    const newNames = Array.from({ length: value }, (_, i) => 
+    const newNames = Array.from({ length: value }, (_, i) =>
       i < playerNames.length ? playerNames[i] : `Player ${i + 1}`
     );
     setPlayerNames(newNames);
@@ -26,7 +27,7 @@ const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onStartGame(numPlayers, playerNames, targetScore);
+    onStartGame(numPlayers, playerNames, targetScore, hintsEnabled);
   };
 
   return (
@@ -36,8 +37,8 @@ const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Number of Players:</label>
-            <select 
-              value={numPlayers} 
+            <select
+              value={numPlayers}
               onChange={(e) => handleNumPlayersChange(parseInt(e.target.value))}
             >
               <option value="2">2 Players</option>
@@ -45,7 +46,7 @@ const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
               <option value="4">4 Players</option>
             </select>
           </div>
-          
+
           {playerNames.map((name, index) => (
             <div key={index} className="form-group">
               <label>Player {index + 1} Name:</label>
@@ -57,7 +58,7 @@ const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
               />
             </div>
           ))}
-          
+
           <div className="form-group">
             <label>Target Score:</label>
             <input
@@ -68,7 +69,18 @@ const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
               max="500"
             />
           </div>
-          
+
+          <div className="form-group form-checkbox">
+            <label>
+              <input
+                type="checkbox"
+                checked={hintsEnabled}
+                onChange={(e) => setHintsEnabled(e.target.checked)}
+              />
+              Enable Hints
+            </label>
+          </div>
+
           <button type="submit" className="btn btn-primary">Start Game</button>
         </form>
       </div>

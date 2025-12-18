@@ -27,13 +27,14 @@ export interface Room {
     createdAt: Date;
     maxPlayers: number;
     targetScore: number;
+    hintsEnabled: boolean;     // Whether hints are allowed in this room
 }
 
 /**
  * Socket.IO event payloads - Client to Server
  */
 export interface ClientToServerEvents {
-    create_room: (data: { playerName: string; targetScore?: number }) => void;
+    create_room: (data: { playerName: string; targetScore?: number; hintsEnabled?: boolean }) => void;
     join_room: (data: { roomCode: string; playerName: string }) => void;
     leave_room: () => void;
     set_ready: (ready: boolean) => void;
