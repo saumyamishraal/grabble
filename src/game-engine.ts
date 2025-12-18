@@ -75,7 +75,7 @@ export class GrabbleEngine {
             if (column < 0 || column >= 7) {
                 throw new Error(`Invalid column: ${column}`);
             }
-
+            
             // Find first empty cell in column (starting from top)
             let placed = false;
             for (let row = 0; row < 7; row++) {
@@ -88,7 +88,7 @@ export class GrabbleEngine {
                     break;
                 }
             }
-
+            
             if (!placed) {
                 throw new Error(`Column ${column} is full`);
             }
@@ -300,10 +300,9 @@ export class GrabbleEngine {
             return { valid: false, error: `Word "${wordUpper}" not in dictionary` };
         }
 
-        // Check if word contains at least one newly placed tile
-        if (!containsNewTile(claim.positions, newlyPlacedTiles)) {
-            return { valid: false, error: 'Word must contain at least one newly placed tile' };
-        }
+        // Note: We no longer require each word to contain a newly placed tile
+        // As long as the player has placed tiles this turn, they can claim any valid word on the board
+        // This check is now done at processWordClaims level (player must have newlyPlacedTiles.length > 0)
 
         // Check if word already claimed (exact same positions)
         const wordAlreadyClaimed = this.state.claimedWords.some(cw => {
@@ -405,11 +404,22 @@ export class GrabbleEngine {
         results: Array<{ valid: boolean; error?: string; word?: string; score?: number; bonuses?: string[] }>;
         totalScore: number;
     }> {
+        // Rule: Player must have placed at least one tile to claim words
+        if (newlyPlacedTiles.length === 0) {
+            return { 
+                valid: false, 
+                results: [{ valid: false, error: 'You must place at least one tile before claiming words' }], 
+                totalScore: 0 
+            };
+        }
+
         const results = [];
         let totalScore = 0;
 
         for (const claim of claims) {
-            const result = await this.validateWordClaim(claim, newlyPlacedTiles, dictionary);
+            // Pass empty array for newlyPlacedTiles since we've already validated the player has placed tiles
+            // This allows claiming any word on the board, not just words containing newly placed tiles
+            const result = await this.validateWordClaim(claim, [], dictionary);
             results.push(result);
             if (result.valid && result.score !== undefined) {
                 totalScore += result.score;
@@ -538,7 +548,7 @@ export class GrabbleEngine {
         const currentTurnOrder = currentPlayer.turnOrder;
         const nextTurnOrder = (currentTurnOrder + 1) % this.state.players.length;
         const nextPlayer = this.state.players.find(p => p.turnOrder === nextTurnOrder);
-
+        
         if (nextPlayer) {
             this.state.currentPlayerId = nextPlayer.id;
         }

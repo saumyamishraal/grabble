@@ -96,6 +96,7 @@ function App() {
   const [renderKey, setRenderKey] = useState(0); // Force re-render
   const [fallingTiles, setFallingTiles] = useState<Set<string>>(new Set()); // Track tiles with falling animation
   const prevSocketTilesPlacedRef = useRef<Position[]>([]); // Track previous socket tiles for animation (use ref to avoid dependency issues)
+  const prevSocketBoardRef = useRef<(Tile | null)[][] | null>(null); // Track previous board state to detect new tiles
   const [errorModal, setErrorModal] = useState<{ isOpen: boolean; message: string }>({ isOpen: false, message: '' });
   const [showSwapConfirm, setShowSwapConfirm] = useState(false);
   const [blankTileModal, setBlankTileModal] = useState<{ isOpen: boolean; position: Position | null; currentLetter: string }>({
@@ -112,6 +113,14 @@ function App() {
   const closeErrorModal = () => {
     setErrorModal({ isOpen: false, message: '' });
   };
+
+  // Show socket errors in the error modal
+  useEffect(() => {
+    if (socketError) {
+      setErrorModal({ isOpen: true, message: socketError });
+      clearSocketError(); // Clear socket error after showing in modal
+    }
+  }, [socketError, clearSocketError]);
 
   // Extract recognized words from selected positions (preserving drag direction)
   const recognizedWords = useMemo(() => {
@@ -153,63 +162,102 @@ function App() {
 
   // Trigger falling animation for newly placed tiles in multiplayer mode
   useEffect(() => {
-    if (isMultiplayer && socketTilesPlacedThisTurn.length > prevSocketTilesPlacedRef.current.length) {
-      // Find newly placed tiles by comparing arrays
-      const newTiles = socketTilesPlacedThisTurn.filter(
-        newPos => !prevSocketTilesPlacedRef.current.some(
-          prevPos => prevPos.x === newPos.x && prevPos.y === newPos.y
-        )
-      );
+    if (isMultiplayer && socketGameState) {
+      const currentBoard = socketGameState.board;
+      const prevBoard = prevSocketBoardRef.current;
+
+      // Detect new tiles by comparing board states
+      const newTiles: Position[] = [];
+      if (prevBoard) {
+        // Compare boards to find new tiles
+        for (let y = 0; y < 7; y++) {
+          for (let x = 0; x < 7; x++) {
+            const currentTile = currentBoard[y]?.[x];
+            const prevTile = prevBoard[y]?.[x];
+            // Tile exists now but didn't before
+            if (currentTile && !prevTile) {
+              newTiles.push({ x, y });
+            }
+          }
+        }
+      } else {
+        // First render - use placedPositions from socketTilesPlacedThisTurn
+        newTiles.push(...socketTilesPlacedThisTurn);
+      }
 
       // Trigger falling animation for each new tile
-      newTiles.forEach(pos => {
-        const tileKey = `${pos.x}-${pos.y}`;
-        setFallingTiles(prev => new Set(prev).add(tileKey));
+      if (newTiles.length > 0) {
+        // Use requestAnimationFrame to ensure DOM has updated with new tiles
+        requestAnimationFrame(() => {
+          newTiles.forEach(pos => {
+            const tileKey = `${pos.x}-${pos.y}`;
+            // Verify tile exists on board before animating
+            const tile = currentBoard[pos.y]?.[pos.x];
+            if (tile) {
+              setFallingTiles(prev => {
+                const newSet = new Set(prev);
+                newSet.add(tileKey);
+                return newSet;
+              });
 
-        // Remove animation after it completes
-        setTimeout(() => {
-          setFallingTiles(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(tileKey);
-            return newSet;
+              // Remove animation after it completes
+              setTimeout(() => {
+                setFallingTiles(prev => {
+                  const newSet = new Set(prev);
+                  newSet.delete(tileKey);
+                  return newSet;
+                });
+              }, 500);
+            }
           });
-        }, 500);
-      });
+        });
+      }
+
+      // Update previous board state
+      prevSocketBoardRef.current = currentBoard.map(row => row.map(tile => tile ? { ...tile } : null));
 
       // Check if any newly placed tile is a blank tile (needs letter assignment)
-      if (socketGameState) {
-        const myIdx = room?.players.findIndex(rp => rp.id === playerId) ?? -1;
+      if (room && playerId && newTiles.length > 0) {
+        // Map socket ID to game player ID: room.players order matches game state players order
+        const myRoomPlayerIndex = room.players.findIndex(rp => rp.id === playerId);
+        if (myRoomPlayerIndex !== -1) {
+          // Game player IDs are 0-indexed and match room player order
+          const myGamePlayerId = myRoomPlayerIndex;
 
-        for (const pos of newTiles) {
-          const placedTile = socketGameState.board[pos.y]?.[pos.x];
+          for (const pos of newTiles) {
+            const placedTile = currentBoard[pos.y]?.[pos.x];
 
-          if (placedTile && placedTile.letter === ' ' && !placedTile.isBlankLocked) {
-            // Check if this tile belongs to me (I placed it)
-            if (placedTile.playerId === myIdx) {
-              setBlankTileModal({
-                isOpen: true,
-                position: pos,
-                currentLetter: placedTile.blankLetter || ''
-              });
-              break; // Only show one modal at a time
+            if (placedTile && placedTile.letter === ' ' && !placedTile.isBlankLocked) {
+              // Check if this tile belongs to me (I placed it)
+              if (placedTile.playerId === myGamePlayerId) {
+                setBlankTileModal({
+                  isOpen: true,
+                  position: pos,
+                  currentLetter: placedTile.blankLetter || ''
+                });
+                break; // Only show one modal at a time
+              }
             }
           }
         }
       }
 
-      // Update previous tiles
+      // Update previous tiles tracking
       prevSocketTilesPlacedRef.current = [...socketTilesPlacedThisTurn];
     } else if (!isMultiplayer) {
       // Reset when switching to local mode
       prevSocketTilesPlacedRef.current = [];
+      prevSocketBoardRef.current = null;
     }
   }, [socketTilesPlacedThisTurn, isMultiplayer, socketGameState, room, playerId]);
 
   // Clear UI state when turn changes in multiplayer
   useEffect(() => {
-    if (isMultiplayer && socketGameState) {
-      const myIdx = room?.players.findIndex(rp => rp.id === playerId) ?? -1;
-      const isMyTurn = socketGameState.currentPlayerId === myIdx;
+    if (isMultiplayer && socketGameState && room && playerId) {
+      // Map socket ID to game player ID: room.players order matches game state players order
+      const myRoomPlayerIndex = room.players.findIndex(rp => rp.id === playerId);
+      const myGamePlayerId = myRoomPlayerIndex !== -1 ? myRoomPlayerIndex : -1;
+      const isMyTurn = socketGameState.currentPlayerId === myGamePlayerId;
 
       // If it's no longer my turn, clear all UI selections
       if (!isMyTurn) {
@@ -230,8 +278,8 @@ function App() {
 
   const handleTileSelect = (index: number) => {
     if (isPlacingTiles) return;
-    setSelectedTiles(prev =>
-      prev.includes(index)
+    setSelectedTiles(prev => 
+      prev.includes(index) 
         ? prev.filter(i => i !== index)
         : [...prev, index]
     );
@@ -239,10 +287,10 @@ function App() {
 
   const handleColumnClick = (column: number) => {
     if (!gameManager || !engine || selectedTiles.length === 0) return;
-
+    
     const currentPlayer = gameManager.getCurrentPlayer();
     const tile = currentPlayer.rack[selectedTiles[0]];
-
+    
     setPendingPlacements(prev => [...prev, { column, tile }]);
     setSelectedTiles(prev => prev.slice(1));
     setIsPlacingTiles(true);
@@ -375,7 +423,8 @@ function App() {
       return;
     }
 
-    // Check if this tile was placed in the current turn
+    // Only allow removing tiles placed in THIS turn (before submitting)
+    // After turn ends, tiles become non-removable
     const wasPlacedThisTurn = tilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y);
     if (!wasPlacedThisTurn) {
       // Don't show error - the X button shouldn't be visible for tiles from previous turns
@@ -389,10 +438,9 @@ function App() {
         const tileToReturn = { letter: removedTile.letter, points: removedTile.points };
         currentPlayer.rack.push(tileToReturn);
 
-        // Remove from tilesPlacedThisTurn
+        // Remove from tilesPlacedThisTurn if it was tracked there
+        // After gravity, tiles above the removed tile have moved down
         setTilesPlacedThisTurn(prev => {
-          // After gravity, tiles above the removed tile have moved down
-          // Update positions: tiles in the same column (x) above the removed row (y) move down by 1
           return prev
             .filter(pos => !(pos.x === x && pos.y === y)) // Remove the deleted tile
             .map(pos => {
@@ -560,9 +608,9 @@ function App() {
 
     // Local mode: use engine directly
     if (!gameManager || !engine) return;
-
+    
     const currentPlayer = gameManager.getCurrentPlayer();
-
+    
     // Check if we have tiles placed this turn OR pending placements
     const hasPlacedTiles = tilesPlacedThisTurn.length > 0 || pendingPlacements.length > 0;
 
@@ -574,20 +622,20 @@ function App() {
     try {
       // Handle pending placements (click-based placement)
       let newlyPlacedFromPending: Position[] = [];
-      if (pendingPlacements.length > 0) {
+    if (pendingPlacements.length > 0) {
         // Remove tiles from rack before placing (in the reverse order to preserve indices)
         const tilesToPlace = pendingPlacements.map(p => p.tile);
         const newRack = currentPlayer.rack.filter((tile, idx) => {
-          const placementIdx = tilesToPlace.findIndex(p =>
+          const placementIdx = tilesToPlace.findIndex(p => 
             p.letter === tile.letter && p.points === tile.points
           );
           return placementIdx === -1;
         });
         currentPlayer.rack = newRack;
-
+        
         engine.placeTiles(pendingPlacements, currentPlayer.id);
         setIsPlacingTiles(false);
-
+        
         // Get newly placed positions (after gravity)
         const state = engine.getState();
         for (const placement of pendingPlacements) {
@@ -653,7 +701,7 @@ function App() {
               wordPositions.some(pos => pos.x === placedPos.x && pos.y === placedPos.y)
             )
           );
-
+          
           if (!allPlacedTilesInWords) {
             const unclaimedTiles = allNewlyPlacedTiles.filter(placedPos =>
               !validWords.some(wordPositions =>
@@ -692,7 +740,16 @@ function App() {
         console.log('Word claims result:', result);
 
         if (!result.valid) {
-          showError('Invalid word claims: ' + result.results.map(r => r.error).join(', '));
+          // Collect all error messages, filtering out undefined values
+          const errorMessages = result.results
+            .map(r => r.error)
+            .filter((error): error is string => error !== undefined && error.length > 0);
+          
+          if (errorMessages.length > 0) {
+            showError('Invalid word claims: ' + errorMessages.join('. '));
+          } else {
+            showError('Invalid word claims. Please check your word selection.');
+          }
           return;
         }
 
@@ -711,25 +768,25 @@ function App() {
 
         setSelectedWords([]);
         setWordDirection(null);
-      }
-
+        }
+        
       // Refill rack and advance turn (only after submitting)
-      engine.refillPlayerRack(currentPlayer.id);
-      engine.advanceTurn();
+        engine.refillPlayerRack(currentPlayer.id);
+        engine.advanceTurn();
 
       // Clear all turn state
       setWordDirection(null);
       setTilesPlacedThisTurn([]);
       setPendingPlacements([]);
       setSelectedTiles([]);
-
-      // Check win condition
-      const winnerId = engine.checkWinCondition();
-      if (winnerId !== null) {
-        const winner = gameManager.getPlayer(winnerId);
+        
+        // Check win condition
+        const winnerId = engine.checkWinCondition();
+        if (winnerId !== null) {
+          const winner = gameManager.getPlayer(winnerId);
         showError(`Game Over! ${winner?.name} wins with ${winner?.score} points!`);
-      }
-
+        }
+        
       // Force re-render by updating render key
       setRenderKey(prev => prev + 1);
 
@@ -793,7 +850,7 @@ function App() {
         setSelectedWords([]);
         setTilesPlacedThisTurn([]);
         setPendingPlacements([]);
-
+        
         // Force re-render
         setGameManager(gameManager);
         setEngine(engine);
@@ -801,11 +858,11 @@ function App() {
 
         console.log('Tiles swapped, turn advanced');
       }
-    } catch (error) {
+      } catch (error) {
       console.error('Error swapping tiles:', error);
       showError(`Error swapping tiles: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setShowSwapConfirm(false);
-    }
+      }
   };
 
   const cancelSwapTiles = () => {
@@ -883,6 +940,37 @@ function App() {
   };
 
   const handleBlankTileEdit = (x: number, y: number) => {
+    // Multiplayer mode: check socket game state
+    if (isMultiplayer) {
+      if (!socketGameState || !room || playerId === null) return;
+      
+      const myIdx = room.players.findIndex(rp => rp.id === playerId);
+      if (myIdx === -1) return;
+      
+      const tile = socketGameState.board[y]?.[x];
+      const isMyTurn = socketGameState.currentPlayerId === myIdx;
+      const finalTilesPlacedThisTurn = socketTilesPlacedThisTurn || [];
+      
+      // Only allow editing if:
+      // 1. It's a blank tile
+      // 2. It belongs to current player (me)
+      // 3. It's not locked (can edit until turn is submitted)
+      // 4. It was placed this turn (or is my tile during my turn)
+      if (tile && tile.letter === ' ' &&
+        tile.playerId === myIdx &&
+        !tile.isBlankLocked &&
+        isMyTurn &&
+        (finalTilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y) || tile.playerId === myIdx)) {
+        setBlankTileModal({
+          isOpen: true,
+          position: { x, y },
+          currentLetter: tile.blankLetter || ''
+        });
+      }
+      return;
+    }
+
+    // Local mode: use engine directly
     if (!gameManager || !engine) return;
 
     const state = engine.getState();
@@ -992,7 +1080,7 @@ function App() {
     <div className="game-container" key={renderKey}>
       <Navbar currentPlayerName={isMyTurn ? `Your turn (${myPlayer.name})` : `${turnIndicatorName}'s turn`} />
       <ScoreArea players={state.players} currentPlayerId={state.currentPlayerId} />
-      <Board
+      <Board 
         board={state.board}
         selectedPositions={selectedWordPositions}
         isPlacingTiles={isPlacingTiles}
@@ -1005,7 +1093,7 @@ function App() {
         tilesPlacedThisTurn={finalTilesPlacedThisTurn}
         onBlankTileEdit={isMyTurn ? handleBlankTileEdit : () => { }}
       />
-      <Rack
+      <Rack 
         tiles={myPlayer.rack}
         selectedIndices={selectedTiles}
         onTileClick={handleTileSelect}

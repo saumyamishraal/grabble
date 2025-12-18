@@ -437,9 +437,10 @@ const Board: React.FC<BoardProps> = ({
                     }}
                   >
                     {(() => {
-                      // Only show remove button if:
+                      // Show remove button only if:
                       // 1. Tile belongs to current player
-                      // 2. Tile was placed in this turn
+                      // 2. Tile was placed in THIS turn (before submitting)
+                      // After turn ends, tiles become non-removable
                       const isCurrentPlayerTile = tile && tile.playerId !== undefined && currentPlayerId !== undefined && tile.playerId === currentPlayerId;
                       const wasPlacedThisTurn = tilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y);
                       const shouldShowRemoveButton = isCurrentPlayerTile && wasPlacedThisTurn && onTileRemove;
