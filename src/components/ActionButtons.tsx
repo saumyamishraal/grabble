@@ -9,18 +9,33 @@ interface ActionButtonsProps {
   hasWordSelected: boolean;
   onClearSelection?: () => void;
   selectedTilesCount?: number;
+  // Hint props
+  onHint?: () => void;
+  hintLevel?: number;
+  canHint?: boolean;
+  hintMessage?: string;
 }
 
-const ActionButtons: React.FC<ActionButtonsProps> = ({ 
-  canSubmit, 
-  onSubmit, 
-  onSwap, 
+const ActionButtons: React.FC<ActionButtonsProps> = ({
+  canSubmit,
+  onSubmit,
+  onSwap,
   canSwap,
   recognizedWords,
   hasWordSelected,
   onClearSelection,
-  selectedTilesCount = 0
+  selectedTilesCount = 0,
+  onHint,
+  hintLevel = 0,
+  canHint = true,
+  hintMessage
 }) => {
+  const getHintButtonText = () => {
+    if (hintLevel === 0) return '💡 Hint';
+    if (hintLevel >= 4) return '💡 Full Solution';
+    return `💡 Hint (${hintLevel}/4)`;
+  };
+
   return (
     <div className="action-buttons">
       {recognizedWords.length > 0 && (
@@ -43,26 +58,43 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
           </div>
         </div>
       )}
+
+      {/* Hint message display */}
+      {hintMessage && (
+        <div className="hint-message">
+          {hintMessage}
+        </div>
+      )}
+
       <div className="action-buttons-row">
-      <button 
-        className="btn btn-primary" 
-        onClick={onSubmit}
+        <button
+          className="btn btn-primary"
+          onClick={onSubmit}
           disabled={!canSubmit || !hasWordSelected}
-      >
-        Submit Move
-      </button>
-      <button 
-        className="btn btn-secondary" 
-        onClick={onSwap}
-        disabled={!canSwap}
+        >
+          Submit Move
+        </button>
+        <button
+          className="btn btn-secondary"
+          onClick={onSwap}
+          disabled={!canSwap}
           title={canSwap ? `Swap ${selectedTilesCount} selected tile${selectedTilesCount !== 1 ? 's' : ''}` : 'Select tiles to swap'}
-      >
+        >
           Swap Tiles {selectedTilesCount > 0 ? `(${selectedTilesCount})` : ''}
-      </button>
+        </button>
+        {onHint && (
+          <button
+            className={`btn btn-hint ${hintLevel > 0 ? 'hint-active' : ''}`}
+            onClick={onHint}
+            disabled={!canHint}
+            title={hintLevel === 0 ? 'Get a hint' : `Click for more detail (level ${hintLevel + 1})`}
+          >
+            {getHintButtonText()}
+          </button>
+        )}
       </div>
     </div>
   );
 };
 
 export default ActionButtons;
-

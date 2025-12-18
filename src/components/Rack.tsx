@@ -9,9 +9,20 @@ interface RackProps {
   onTileDragStart?: (index: number, tile: Tile) => void;
   playerId?: number;
   disabled?: boolean;  // When true, tiles cannot be dragged or selected
+  hintedIndices?: number[];  // Indices of tiles highlighted by hint system (use these)
+  swapHintedIndices?: number[];  // Indices of tiles suggested for swapping (swap these)
 }
 
-const Rack: React.FC<RackProps> = ({ tiles, selectedIndices, onTileClick, onTileDragStart, playerId = 0, disabled = false }) => {
+const Rack: React.FC<RackProps> = ({
+  tiles,
+  selectedIndices,
+  onTileClick,
+  onTileDragStart,
+  playerId = 0,
+  disabled = false,
+  hintedIndices = [],
+  swapHintedIndices = []
+}) => {
   const playerColor = getPlayerColor(playerId);
 
   const handleDragStart = (e: React.DragEvent, index: number, tile: Tile) => {
@@ -30,6 +41,9 @@ const Rack: React.FC<RackProps> = ({ tiles, selectedIndices, onTileClick, onTile
     }
   };
 
+  const isHinted = (index: number) => hintedIndices.includes(index);
+  const isSwapHinted = (index: number) => swapHintedIndices.includes(index);
+
   return (
     <div className="rack-container">
       <div className="rack-label">{disabled ? 'Waiting for your turn...' : 'Your Tiles (Tap to select, then tap board to place)'}</div>
@@ -37,7 +51,7 @@ const Rack: React.FC<RackProps> = ({ tiles, selectedIndices, onTileClick, onTile
         {tiles.map((tile, index) => (
           <div
             key={index}
-            className={`rack-tile ${selectedIndices.includes(index) ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
+            className={`rack-tile ${selectedIndices.includes(index) ? 'selected' : ''} ${disabled ? 'disabled' : ''} ${isHinted(index) ? 'hinted' : ''} ${isSwapHinted(index) ? 'swap-hinted' : ''}`}
             onClick={() => !disabled && onTileClick(index)}
             draggable={!disabled}
             onDragStart={(e) => handleDragStart(e, index, tile)}

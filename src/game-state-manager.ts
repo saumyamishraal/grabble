@@ -60,7 +60,7 @@ export class GameStateManager {
         }
 
         // Find starting player (lowest turnOrder)
-        const startingPlayer = players.reduce((min, p) => 
+        const startingPlayer = players.reduce((min, p) =>
             p.turnOrder < min.turnOrder ? p : min
         );
 
@@ -165,7 +165,7 @@ export class GameStateManager {
      */
     endGame(): Player {
         // Find player with highest score
-        const winner = this.state.players.reduce((max, p) => 
+        const winner = this.state.players.reduce((max, p) =>
             p.score > max.score ? p : max
         );
 
@@ -220,5 +220,25 @@ export class GameStateManager {
      */
     getLeaderboard(): Player[] {
         return [...this.state.players].sort((a, b) => b.score - a.score);
+    }
+    /**
+     * Get number of players
+     */
+    getNumPlayers(): number {
+        return this.state.players.length;
+    }
+
+    /**
+     * Get player names
+     */
+    getPlayerNames(): string[] {
+        return this.state.players.map(p => p.name);
+    }
+
+    /**
+     * Get target score
+     */
+    getTargetScore(): number {
+        return this.state.targetScore;
     }
 }

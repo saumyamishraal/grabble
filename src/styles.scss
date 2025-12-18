@@ -72,9 +72,12 @@
 
 /* Palindrome mirror/flip animation */
 @keyframes palindromeFlip {
-    0%, 100% {
+
+    0%,
+    100% {
         transform: scaleX(1);
     }
+
     50% {
         transform: scaleX(-1);
     }
@@ -87,17 +90,20 @@
         transform: translate(0, 0);
         box-shadow: 0 0 10px rgba(138, 43, 226, 0.4);
     }
+
     40% {
         /* Fully swap positions - tiles reach their reverse positions */
         /* Use pre-calculated translate values to handle negative values correctly */
         transform: translate(var(--emordnilap-translate-x, 0px), var(--emordnilap-translate-y, 0px));
         box-shadow: 0 0 30px rgba(138, 43, 226, 0.9);
     }
+
     60% {
         /* Hold at swapped positions */
         transform: translate(var(--emordnilap-translate-x, 0px), var(--emordnilap-translate-y, 0px));
         box-shadow: 0 0 30px rgba(138, 43, 226, 0.9);
     }
+
     100% {
         /* Return to original positions */
         transform: translate(0, 0);
@@ -112,11 +118,13 @@
         box-shadow: 0 0 10px rgba(34, 139, 34, 0.3);
         filter: brightness(1);
     }
+
     50% {
         transform: scale(1.15);
         box-shadow: 0 0 30px rgba(34, 139, 34, 0.9);
         filter: brightness(1.4);
     }
+
     100% {
         transform: scale(1);
         box-shadow: 0 0 10px rgba(34, 139, 34, 0.3);
@@ -508,7 +516,7 @@ textarea,
                 box-shadow: 0 0 20px rgba(138, 43, 226, 0.6);
                 /* Disable transition and hover transform during animation */
                 transition: none !important;
-                
+
                 &:hover {
                     /* Disable hover transform during animation */
                     transform: none !important;
@@ -674,6 +682,44 @@ textarea,
             cursor: grabbing;
         }
 
+        &.hinted {
+            border-color: #FFD700 !important;
+            box-shadow: 0 0 12px 4px rgba(255, 215, 0, 0.6), 0 4px 8px rgba(0, 0, 0, 0.2);
+            animation: hintGlow 1s ease-in-out infinite;
+            z-index: 10;
+        }
+
+        @keyframes hintGlow {
+
+            0%,
+            100% {
+                box-shadow: 0 0 8px 2px rgba(255, 215, 0, 0.4), 0 4px 8px rgba(0, 0, 0, 0.2);
+            }
+
+            50% {
+                box-shadow: 0 0 16px 6px rgba(255, 215, 0, 0.8), 0 4px 12px rgba(0, 0, 0, 0.3);
+            }
+        }
+
+        &.swap-hinted {
+            border-color: #FF6B6B !important;
+            box-shadow: 0 0 12px 4px rgba(255, 107, 107, 0.6), 0 4px 8px rgba(0, 0, 0, 0.2);
+            animation: swapGlow 1s ease-in-out infinite;
+            z-index: 10;
+        }
+
+        @keyframes swapGlow {
+
+            0%,
+            100% {
+                box-shadow: 0 0 8px 2px rgba(255, 107, 107, 0.4), 0 4px 8px rgba(0, 0, 0, 0.2);
+            }
+
+            50% {
+                box-shadow: 0 0 16px 6px rgba(255, 107, 107, 0.8), 0 4px 12px rgba(0, 0, 0, 0.3);
+            }
+        }
+
         .letter {
             font-size: 1.2em;
         }
@@ -825,6 +871,65 @@ textarea,
                 border-color: #d0d0d0;
             }
         }
+
+        &.btn-hint {
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            color: #1a1a1a;
+            border: none;
+            font-weight: 600;
+
+            &:hover:not(:disabled) {
+                background: linear-gradient(135deg, #FFEC8B, #FFB347);
+                box-shadow: 0 2px 8px rgba(255, 193, 7, 0.4);
+                transform: translateY(-1px);
+            }
+
+            &:disabled {
+                background: #e0e0e0;
+                cursor: not-allowed;
+                opacity: 0.5;
+            }
+
+            &.hint-active {
+                animation: hintPulse 1s ease-in-out infinite;
+            }
+        }
+    }
+}
+
+.hint-message {
+    background: linear-gradient(135deg, #FFF9E6, #FFF3CD);
+    border: 1px solid #FFD700;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.95rem;
+    color: #856404;
+    text-align: center;
+    animation: hintSlideIn 0.3s ease-out;
+}
+
+@keyframes hintPulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 5px rgba(255, 193, 7, 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 15px rgba(255, 193, 7, 0.6);
+    }
+}
+
+@keyframes hintSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
 
@@ -881,6 +986,7 @@ textarea,
     from {
         opacity: 0;
     }
+
     to {
         opacity: 1;
     }
@@ -890,6 +996,7 @@ textarea,
     from {
         opacity: 1;
     }
+
     to {
         opacity: 0;
     }
@@ -899,9 +1006,11 @@ textarea,
     0% {
         transform: scale(0.8);
     }
+
     50% {
         transform: scale(1.1);
     }
+
     100% {
         transform: scale(1);
     }

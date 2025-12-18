@@ -90,17 +90,34 @@ export function useSocket(): UseSocketReturn {
 
     // Initialize socket connection
     useEffect(() => {
-        const socket = io(SOCKET_URL, {
-            autoConnect: true,
-            reconnection: true,
-            reconnectionAttempts: 5,
-            reconnectionDelay: 1000,
-            transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
-            upgrade: true,
-            rememberUpgrade: false
-        });
+        // Singleton pattern: reuse existing socket if available
+        // This prevents hot-reload from disconnecting players
+        if (socketRef.current?.connected) {
+            console.log('♻️ Reusing existing socket connection');
+            setConnected(true);
+            setPlayerId(socketRef.current.id || null);
+            return;
+        }
 
-        socketRef.current = socket;
+        // Only create new socket if none exists
+        if (!socketRef.current) {
+            const socket = io(SOCKET_URL, {
+                autoConnect: true,
+                reconnection: true,
+                reconnectionAttempts: 10,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 5000,
+                timeout: 20000,
+                transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
+                upgrade: true,
+                rememberUpgrade: false
+            });
+
+            socketRef.current = socket;
+            console.log('🔌 Creating new socket connection');
+        }
+
+        const socket = socketRef.current;
 
         // Connection events
         socket.on('connect', () => {
@@ -108,15 +125,22 @@ export function useSocket(): UseSocketReturn {
             setConnected(true);
             setPlayerId(socket.id || null);
         });
-        
+
         socket.on('connect_error', (error) => {
             console.error('❌ Socket connection error:', error.message, 'trying to connect to:', SOCKET_URL);
             setError(`Connection failed: ${error.message}. Server URL: ${SOCKET_URL}`);
         });
 
-        socket.on('disconnect', () => {
-            console.log('🔌 Disconnected from server');
+        socket.on('disconnect', (reason) => {
+            console.log('🔌 Disconnected from server. Reason:', reason);
             setConnected(false);
+            // Don't clear playerId on disconnect - allow reconnection
+        });
+
+        socket.on('reconnect', (attemptNumber) => {
+            console.log('🔄 Reconnected after', attemptNumber, 'attempts');
+            setConnected(true);
+            setPlayerId(socket.id || null);
         });
 
         // Room events
@@ -284,9 +308,13 @@ export function useSocket(): UseSocketReturn {
             setError(message);
         });
 
-        // Cleanup on unmount
+        // Cleanup on unmount - DON'T disconnect socket during hot reload
+        // Only remove event listeners to prevent duplicate handlers
         return () => {
-            socket.disconnect();
+            // Note: We intentionally don't call socket.disconnect() here
+            // This allows the socket to persist across React hot reloads
+            // The socket will disconnect when the browser tab closes
+            console.log('🔄 Component unmounting, keeping socket alive');
         };
     }, []);
 
