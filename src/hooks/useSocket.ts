@@ -6,7 +6,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type { GameState } from '../types';
-import type { Room, RoomPlayer, ServerToClientEvents } from '../../server/types';
+import type { Room, RoomPlayer, ServerToClientEvents } from '../server-types';
 
 // Server URL - configurable via environment variable or config
 // For GitHub Pages: set REACT_APP_SOCKET_URL in build, or it will try to connect to same hostname:3001

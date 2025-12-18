@@ -5,14 +5,34 @@ import './styles.scss';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 
-const root = ReactDOM.createRoot(
-  document.getElementById('root') as HTMLElement
-);
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+console.log('🚀 index.tsx loaded, attempting to render App...');
+
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error('Root element not found');
+}
+
+console.log('✅ Root element found, creating root...');
+
+try {
+  const root = ReactDOM.createRoot(rootElement);
+  console.log('✅ Root created, rendering App...');
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+  console.log('✅ App rendered successfully!');
+} catch (error) {
+  console.error('❌ Error rendering App:', error);
+  rootElement.innerHTML = `
+    <div style="padding: 20px; font-family: monospace;">
+      <h1>Error Loading App</h1>
+      <pre>${error instanceof Error ? error.stack : String(error)}</pre>
+    </div>
+  `;
+  throw error;
+}
 
 // If you want to start measuring performance in your app, pass a function
 // to log results (for example: reportWebVitals(console.log))

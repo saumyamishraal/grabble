@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import type { Room, RoomPlayer } from '../../server/types';
+import type { Room, RoomPlayer } from '../server-types';
 
 interface LobbyScreenProps {
     // Connection state
