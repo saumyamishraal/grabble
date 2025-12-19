@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { UI_MESSAGES } from '../constants/messages';
 
 type GameModeSelection = 'normal' | 'solo';
 
@@ -49,25 +50,25 @@ const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
   return (
     <div className="modal show">
       <div className="modal-content">
-        <h2>Start New Game</h2>
+        <h2>{UI_MESSAGES.setup.startNewGame}</h2>
         <form onSubmit={handleSubmit}>
           {/* Game Mode Selection */}
           <div className="form-group">
-            <label>Game Mode:</label>
+            <label>{UI_MESSAGES.setup.gameMode}</label>
             <div className="game-mode-toggle">
               <button
                 type="button"
                 className={`mode-btn ${gameMode === 'normal' ? 'active' : ''}`}
                 onClick={() => setGameMode('normal')}
               >
-                🎮 Versus
+                {UI_MESSAGES.setup.versus}
               </button>
               <button
                 type="button"
                 className={`mode-btn ${gameMode === 'solo' ? 'active' : ''}`}
                 onClick={() => setGameMode('solo')}
               >
-                🧘 Solo Endless
+                {UI_MESSAGES.setup.soloEndless}
               </button>
             </div>
           </div>
@@ -76,20 +77,20 @@ const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
             <>
               {/* Normal Mode Options */}
               <div className="form-group">
-                <label>Number of Players:</label>
+                <label>{UI_MESSAGES.setup.numberOfPlayers}</label>
                 <select
                   value={numPlayers}
                   onChange={(e) => handleNumPlayersChange(parseInt(e.target.value))}
                 >
-                  <option value="2">2 Players</option>
-                  <option value="3">3 Players</option>
-                  <option value="4">4 Players</option>
+                  <option value="2">{UI_MESSAGES.setup.players(2)}</option>
+                  <option value="3">{UI_MESSAGES.setup.players(3)}</option>
+                  <option value="4">{UI_MESSAGES.setup.players(4)}</option>
                 </select>
               </div>
 
               {playerNames.map((name, index) => (
                 <div key={index} className="form-group">
-                  <label>Player {index + 1} Name:</label>
+                  <label>{UI_MESSAGES.setup.playerName(index + 1)}</label>
                   <input
                     type="text"
                     value={name}
@@ -100,7 +101,7 @@ const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
               ))}
 
               <div className="form-group">
-                <label>Target Score:</label>
+                <label>{UI_MESSAGES.setup.targetScore}</label>
                 <input
                   type="number"
                   value={targetScore}
@@ -114,12 +115,12 @@ const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
             <>
               {/* Solo Mode Options */}
               <div className="form-group">
-                <label>Your Name:</label>
+                <label>{UI_MESSAGES.lobby.yourName}</label>
                 <input
                   type="text"
                   value={soloPlayerName}
                   onChange={(e) => setSoloPlayerName(e.target.value)}
-                  placeholder="Enter your name"
+                  placeholder={UI_MESSAGES.lobby.enterYourName}
                   required
                 />
               </div>
@@ -131,13 +132,13 @@ const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
                     checked={zenMode}
                     onChange={(e) => setZenMode(e.target.checked)}
                   />
-                  🧘 Zen Mode (hide score)
+                  {UI_MESSAGES.setup.zenMode}
                 </label>
               </div>
 
               <div className="solo-info">
-                <p>🎯 Build words endlessly until the board fills up!</p>
-                <p>📈 Your high score will be saved locally.</p>
+                <p>{UI_MESSAGES.setup.zenModeDescription}</p>
+                <p>{UI_MESSAGES.setup.zenModeHighScore}</p>
               </div>
             </>
           )}
@@ -149,12 +150,12 @@ const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
                 checked={hintsEnabled}
                 onChange={(e) => setHintsEnabled(e.target.checked)}
               />
-              💡 Enable Hints
+              {UI_MESSAGES.setup.enableHints}
             </label>
           </div>
 
           <button type="submit" className="btn btn-primary">
-            {gameMode === 'solo' ? '🧘 Start Solo' : '🎮 Start Game'}
+            {gameMode === 'solo' ? UI_MESSAGES.buttons.startSolo : UI_MESSAGES.buttons.startGame}
           </button>
         </form>
       </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { UI_MESSAGES } from '../constants/messages';
 
 interface NewGameRequestModalProps {
   isOpen: boolean;
@@ -46,28 +47,28 @@ const NewGameRequestModal: React.FC<NewGameRequestModalProps> = ({
       <div className="modal-content new-game-request-modal" onClick={(e) => e.stopPropagation()}>
         {mode === 'request_sent' && (
           <>
-            <h2>Request Sent</h2>
+            <h2>{UI_MESSAGES.newGameRequest.requestSent}</h2>
             <p style={{ marginBottom: '1.5rem', color: '#666' }}>
-              Waiting for all players to accept the new game request...
+              {UI_MESSAGES.newGameRequest.waitingForAcceptance}
             </p>
             <button className="btn btn-secondary" onClick={onClose}>
-              Close
+              {UI_MESSAGES.buttons.close}
             </button>
           </>
         )}
 
         {mode === 'request_received' && (
           <>
-            <h2>New Game Request</h2>
+            <h2>{UI_MESSAGES.newGameRequest.title}</h2>
             <p style={{ marginBottom: '1.5rem', color: '#666' }}>
-              <strong>{requesterName}</strong> wants to start a new game. Do you accept?
+              {UI_MESSAGES.newGameRequest.requestMessage(requesterName || '')}
             </p>
             <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
               <button className="btn btn-primary" onClick={onAccept}>
-                Accept
+                {UI_MESSAGES.buttons.accept}
               </button>
               <button className="btn btn-secondary" onClick={onDecline}>
-                Decline
+                {UI_MESSAGES.buttons.decline}
               </button>
             </div>
           </>
@@ -75,12 +76,12 @@ const NewGameRequestModal: React.FC<NewGameRequestModalProps> = ({
 
         {mode === 'declined' && (
           <>
-            <h2 style={{ color: '#d32f2f' }}>Request Declined</h2>
+            <h2 style={{ color: '#d32f2f' }}>{UI_MESSAGES.newGameRequest.requestDeclined}</h2>
             <p style={{ marginBottom: '1.5rem', color: '#666' }}>
-              <strong>{declinedPlayerName}</strong> declined the new game request. The current game will continue.
+              {UI_MESSAGES.newGameRequest.declinedMessage(declinedPlayerName || '')}
             </p>
             <button className="btn btn-primary" onClick={onClose}>
-              OK
+              {UI_MESSAGES.buttons.ok}
             </button>
           </>
         )}

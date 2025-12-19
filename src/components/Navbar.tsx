@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { UI_MESSAGES } from '../constants/messages';
 
 interface NavbarProps {
   currentPlayerName: string;
@@ -56,15 +57,15 @@ const Navbar: React.FC<NavbarProps> = ({
     <>
     <nav className="navbar">
         <div className="navbar-left">
-      <h1>Grabble</h1>
+      <h1>{UI_MESSAGES.navbar.title}</h1>
         </div>
         <div className="turn-indicator">{currentPlayerName}</div>
         <div className="navbar-right" ref={menuRef}>
           <button 
             className="info-btn" 
             onClick={() => setInfoOpen(true)}
-            aria-label="How to play"
-            title="How to play"
+            aria-label={UI_MESSAGES.navbar.howToPlay}
+            title={UI_MESSAGES.navbar.howToPlay}
           >
             <svg xmlns="http://www.w3.org/2000/svg" height="20" width="20" viewBox="0 0 160 160" fill="currentColor">
               <path d="m80 15c-35.88 0-65 29.12-65 65s29.12 65 65 65 65-29.12 65-65-29.12-65-65-65zm0 10c30.36 0 55 24.64 55 55s-24.64 55-55 55-55-24.64-55-55 24.64-55 55-55z"/>
@@ -86,19 +87,19 @@ const Navbar: React.FC<NavbarProps> = ({
                 className="menu-item" 
                 onClick={handleStartNewGame}
               >
-                Start New Game
+                {UI_MESSAGES.buttons.startNewGame}
               </button>
               <button 
                 className="menu-item" 
                 onClick={handleClearBoard}
               >
-                Request Clear Board
+                {UI_MESSAGES.buttons.requestClearBoard}
               </button>
               <button 
                 className="menu-item" 
                 onClick={handleToggleSound}
               >
-                {soundEnabled ? 'Turn Sound Off' : 'Turn Sound On'}
+                {soundEnabled ? UI_MESSAGES.buttons.turnSoundOff : UI_MESSAGES.buttons.turnSoundOn}
               </button>
             </div>
           )}
@@ -121,68 +122,66 @@ const InfoModal: React.FC<InfoModalProps> = ({ onClose }) => {
   return (
     <div className="modal-content info-modal" onClick={(e) => e.stopPropagation()}>
       <div className="modal-header">
-        <h2>How to Play Grabble</h2>
+        <h2>{UI_MESSAGES.navbar.howToPlayTitle}</h2>
         <button className="modal-close" onClick={onClose}>×</button>
       </div>
       <div className="modal-body">
           <div className="info-section">
-            <h3>Objective</h3>
-            <p>Form words on a 7×7 grid using Scrabble tiles. Be the first to reach the target score!</p>
+            <h3>{UI_MESSAGES.navbar.objective}</h3>
+            <p>{UI_MESSAGES.navbar.objectiveDescription}</p>
           </div>
           
           <div className="info-section">
-            <h3>Placing Tiles</h3>
+            <h3>{UI_MESSAGES.navbar.placingTiles}</h3>
             <ul>
-              <li>Drag tiles from your rack to the top row of any column</li>
-              <li>Tiles automatically fall to the lowest empty space in that column (gravity)</li>
-              <li>You can also drag tiles directly to any empty cell on the board</li>
+              {UI_MESSAGES.navbar.placingTilesItems.map((item, index) => (
+                <li key={index}>{item}</li>
+              ))}
             </ul>
           </div>
 
           <div className="info-section">
-            <h3>Forming Words</h3>
+            <h3>{UI_MESSAGES.navbar.formingWords}</h3>
             <ul>
-              <li>Drag your cursor across tiles to select a word (horizontal, vertical, or diagonal)</li>
-              <li>Words must be at least 3 letters long</li>
-              <li>All words must be valid dictionary words</li>
-              <li>You can select multiple words before submitting</li>
+              {UI_MESSAGES.navbar.formingWordsItems.map((item, index) => (
+                <li key={index}>{item}</li>
+              ))}
             </ul>
           </div>
 
           <div className="info-section">
-            <h3>Removing Tiles</h3>
+            <h3>{UI_MESSAGES.navbar.removingTiles}</h3>
             <ul>
-              <li>Double-click a tile to remove it (only tiles placed this turn)</li>
-              <li>Drag a tile out of the board to remove it</li>
-              <li>Click the × button on a tile to remove it</li>
-              <li>You can only remove tiles you placed during your current turn</li>
+              {UI_MESSAGES.navbar.removingTilesItems.map((item, index) => (
+                <li key={index}>{item}</li>
+              ))}
             </ul>
           </div>
 
           <div className="info-section">
-            <h3>Scoring</h3>
+            <h3>{UI_MESSAGES.navbar.scoring}</h3>
             <ul>
-              <li><strong>Base Score:</strong> Sum of letter values</li>
-              <li><strong>Diagonal Bonus:</strong> 2× multiplier for diagonal words</li>
-              <li><strong>Palindrome Bonus:</strong> 2× multiplier for words that read the same forwards and backwards (e.g., "RADAR")</li>
-              <li><strong>Emordnilap Bonus:</strong> 2× multiplier when a word and its reverse are both valid (e.g., "TIN" and "NIT")</li>
-              <li>Bonuses stack multiplicatively</li>
+              {UI_MESSAGES.navbar.scoringItems.map((item, index) => (
+                <li key={index} dangerouslySetInnerHTML={{ __html: item }} />
+              ))}
             </ul>
           </div>
 
           <div className="info-section">
-            <h3>Special Tiles</h3>
+            <h3>{UI_MESSAGES.navbar.specialTiles}</h3>
             <ul>
-              <li><strong>Blank Tiles:</strong> Click to assign a letter. The letter is locked after you submit your move</li>
-              <li>Blank tiles are worth 0 points</li>
+              {UI_MESSAGES.navbar.specialTilesItems.map((item, index) => (
+                <li key={index}>{item}</li>
+              ))}
             </ul>
           </div>
 
           <div className="info-section">
-            <h3>Other Actions</h3>
+            <h3>{UI_MESSAGES.navbar.otherActions}</h3>
             <ul>
-              <li><strong>Swap Tiles:</strong> Select tiles from your rack and swap them for new ones (costs your turn)</li>
-              <li><strong>Submit Move:</strong> Submit all selected words to score points</li>
+              {UI_MESSAGES.navbar.otherActionsItems.map((item, index) => (
+                <li key={index} dangerouslySetInnerHTML={{ __html: item }} />
+              ))}
             </ul>
           </div>
         </div>

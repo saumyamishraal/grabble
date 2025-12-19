@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Tile } from '../types';
+import { UI_MESSAGES } from '../constants/messages';
 
 interface SwapConfirmModalProps {
   isOpen: boolean;
@@ -19,10 +20,9 @@ const SwapConfirmModal: React.FC<SwapConfirmModalProps> = ({
   return (
     <div className="modal show" onClick={onCancel}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h2>Confirm Swap Tiles</h2>
+        <h2>{UI_MESSAGES.swap.title}</h2>
         <p style={{ marginBottom: '1rem', color: '#666' }}>
-          You are about to swap {selectedTiles.length} tile{selectedTiles.length !== 1 ? 's' : ''}. 
-          This will end your turn.
+          {UI_MESSAGES.swap.description(selectedTiles.length)}
         </p>
         
         <div style={{ 
@@ -32,7 +32,7 @@ const SwapConfirmModal: React.FC<SwapConfirmModalProps> = ({
           borderRadius: '8px' 
         }}>
           <div style={{ marginBottom: '0.5rem', fontWeight: 'bold', color: '#333' }}>
-            Tiles to swap:
+            {UI_MESSAGES.swap.tilesToSwap}
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             {selectedTiles.map((tile, index) => (
@@ -49,7 +49,7 @@ const SwapConfirmModal: React.FC<SwapConfirmModalProps> = ({
                 }}
               >
                 <div>{tile.letter}</div>
-                <div style={{ fontSize: '0.7rem', color: '#666' }}>{tile.points} pts</div>
+                <div style={{ fontSize: '0.7rem', color: '#666' }}>{tile.points} {UI_MESSAGES.swap.points}</div>
               </div>
             ))}
           </div>
@@ -61,14 +61,14 @@ const SwapConfirmModal: React.FC<SwapConfirmModalProps> = ({
             onClick={onCancel}
             style={{ flex: 1 }}
           >
-            Cancel
+            {UI_MESSAGES.buttons.cancel}
           </button>
           <button
             className="btn btn-primary"
             onClick={onConfirm}
             style={{ flex: 1 }}
           >
-            Confirm Swap
+            {UI_MESSAGES.buttons.confirmSwap}
           </button>
         </div>
       </div>

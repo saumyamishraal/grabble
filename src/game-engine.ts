@@ -238,7 +238,7 @@ export class GrabbleEngine {
     }
 
     /**
-     * Validate word claim
+     * Validate word claim (without checking for new tiles - that's done at the batch level)
      * Returns validation result with error message if invalid
      */
     async validateWordClaim(
@@ -257,10 +257,8 @@ export class GrabbleEngine {
             return { valid: false, error: 'Word not in dictionary' };
         }
 
-        // Check if word contains at least one newly placed tile
-        if (!containsNewTile(claim.positions, newlyPlacedTiles)) {
-            return { valid: false, error: 'Word must contain at least one newly placed tile' };
-        }
+        // Note: We don't check for new tiles here - that's done at the batch level in processWordClaims
+        // This allows claiming words that don't contain new tiles, as long as at least one word does
 
         // Check if word already claimed
         const wordAlreadyClaimed = this.state.claimedWords.some(cw => {
@@ -298,6 +296,42 @@ export class GrabbleEngine {
         results: Array<{ valid: boolean; error?: string; word?: string; score?: number; bonuses?: string[] }>;
         totalScore: number;
     }> {
+        // If tiles were placed this turn, validate connectivity rules
+        if (newlyPlacedTiles.length > 0) {
+            // Rule 1: At least one word must contain a newly placed tile
+            const atLeastOneWordHasNewTile = claims.some(claim =>
+                containsNewTile(claim.positions, newlyPlacedTiles)
+            );
+            if (!atLeastOneWordHasNewTile) {
+                return {
+                    valid: false,
+                    results: claims.map(() => ({
+                        valid: false,
+                        error: 'At least one word must contain a tile you placed this turn'
+                    })),
+                    totalScore: 0
+                };
+            }
+
+            // Rule 2: All placed tiles must be used in at least one word
+            const allTilesUsed = newlyPlacedTiles.every(placedPos =>
+                claims.some(claim =>
+                    claim.positions.some(pos => pos.x === placedPos.x && pos.y === placedPos.y)
+                )
+            );
+            if (!allTilesUsed) {
+                return {
+                    valid: false,
+                    results: claims.map(() => ({
+                        valid: false,
+                        error: 'All tiles placed this turn must be part of at least one selected word'
+                    })),
+                    totalScore: 0
+                };
+            }
+        }
+
+        // Validate each word claim (dictionary, format, duplicates, etc.)
         const results = [];
         let totalScore = 0;
 
@@ -493,13 +527,16 @@ export class GrabbleEngine {
 
         const tile = this.state.board[y][x];
 
+        // A blank tile is identified by letter === ' ', not by isBlank property
+        // Allow setting letter if: it's a blank tile, belongs to the player, and isn't locked
         if (tile &&
             tile.letter === ' ' &&
-            tile.isBlank &&
             tile.playerId === playerId &&
             !tile.isBlankLocked) {
             tile.blankLetter = letter.toUpperCase();
-            tile.isBlankLocked = true;
+            // Don't lock it immediately - allow re-editing until turn is submitted
+            // Locking will happen when the turn is submitted
+            tile.isBlankLocked = false;
             return true;
         }
 

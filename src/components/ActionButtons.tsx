@@ -1,4 +1,5 @@
 import React from 'react';
+import { UI_MESSAGES } from '../constants/messages';
 
 interface ActionButtonsProps {
   canSubmit: boolean;
@@ -31,9 +32,9 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
   hintMessage
 }) => {
   const getHintButtonText = () => {
-    if (hintLevel === 0) return '💡 Hint';
-    if (hintLevel >= 4) return '💡 Full Solution';
-    return `💡 Hint (${hintLevel}/4)`;
+    if (hintLevel === 0) return UI_MESSAGES.buttons.hint;
+    if (hintLevel >= 4) return UI_MESSAGES.buttons.hintFullSolution;
+    return UI_MESSAGES.buttons.hintWithLevel(hintLevel);
   };
 
   return (
@@ -41,15 +42,15 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
       {recognizedWords.length > 0 && (
         <div className="recognized-words">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <label>Selected Words:</label>
+            <label>{UI_MESSAGES.actions.selectedWords}</label>
             {onClearSelection && (
               <button
                 className="btn-clear-selection"
                 onClick={onClearSelection}
-                title="Clear selection"
+                title={UI_MESSAGES.buttons.clearSelection}
                 type="button"
               >
-                Clear
+                {UI_MESSAGES.buttons.clear}
               </button>
             )}
           </div>
@@ -72,22 +73,22 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
           onClick={onSubmit}
           disabled={!canSubmit || !hasWordSelected}
         >
-          Submit Move
+          {UI_MESSAGES.buttons.submitMove}
         </button>
         <button
           className="btn btn-secondary"
           onClick={onSwap}
           disabled={!canSwap}
-          title={canSwap ? `Swap ${selectedTilesCount} selected tile${selectedTilesCount !== 1 ? 's' : ''}` : 'Select tiles to swap'}
+          title={UI_MESSAGES.buttons.swapTilesTooltip(selectedTilesCount)}
         >
-          Swap Tiles {selectedTilesCount > 0 ? `(${selectedTilesCount})` : ''}
+          {UI_MESSAGES.buttons.swapTilesWithCount(selectedTilesCount)}
         </button>
         {onHint && (
           <button
             className={`btn btn-hint ${hintLevel > 0 ? 'hint-active' : ''}`}
             onClick={onHint}
             disabled={!canHint}
-            title={hintLevel === 0 ? 'Get a hint' : `Click for more detail (level ${hintLevel + 1})`}
+            title={UI_MESSAGES.buttons.hintTooltip(hintLevel)}
           >
             {getHintButtonText()}
           </button>

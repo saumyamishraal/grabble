@@ -4,6 +4,7 @@
 
 import React, { useState } from 'react';
 import type { Room, RoomPlayer } from '../server-types';
+import { UI_MESSAGES } from '../constants/messages';
 
 interface LobbyScreenProps {
     // Connection state
@@ -57,22 +58,22 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
         return (
             <div className="modal show">
                 <div className="modal-content lobby-screen">
-                    <h2>🎮 Game Lobby</h2>
+                    <h2>{UI_MESSAGES.lobby.gameLobby}</h2>
 
                     <div className="room-code-display">
-                        <span className="label">Room Code:</span>
+                        <span className="label">{UI_MESSAGES.lobby.roomCode}</span>
                         <span className="code">{roomCode}</span>
                         <button
                             className="btn-copy"
                             onClick={() => navigator.clipboard.writeText(roomCode)}
-                            title="Copy to clipboard"
+                            title={UI_MESSAGES.lobby.copyToClipboard}
                         >
                             📋
                         </button>
                     </div>
 
                     <div className="players-list">
-                        <h3>Players ({room.players.length}/4)</h3>
+                        <h3>{UI_MESSAGES.lobby.players(room.players.length, 4)}</h3>
                         {room.players.map((player, index) => (
                             <div
                                 key={player.id}
@@ -81,18 +82,18 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
                             >
                                 <span className="player-name">
                                     {player.name}
-                                    {player.isHost && <span className="host-badge">👑 Host</span>}
-                                    {player.id === playerId && <span className="you-badge">(You)</span>}
+                                    {player.isHost && <span className="host-badge">{UI_MESSAGES.lobby.host}</span>}
+                                    {player.id === playerId && <span className="you-badge">{UI_MESSAGES.lobby.you}</span>}
                                 </span>
                                 <span className={`ready-status ${player.isReady ? 'ready' : 'not-ready'}`}>
-                                    {player.isReady ? '✓ Ready' : 'Not Ready'}
+                                    {player.isReady ? UI_MESSAGES.lobby.ready : UI_MESSAGES.lobby.notReady}
                                 </span>
                             </div>
                         ))}
                     </div>
 
                     {room.players.length < 2 && (
-                        <p className="waiting-text">Waiting for more players to join...</p>
+                        <p className="waiting-text">{UI_MESSAGES.lobby.waitingForPlayers}</p>
                     )}
 
                     <div className="lobby-actions">
@@ -101,14 +102,14 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
                                 className="btn btn-primary"
                                 onClick={() => setReady(true)}
                             >
-                                I'm Ready!
+                                {UI_MESSAGES.buttons.imReady}
                             </button>
                         ) : (
                             <button
                                 className="btn btn-secondary"
                                 onClick={() => setReady(false)}
                             >
-                                Not Ready
+                                {UI_MESSAGES.buttons.notReady}
                             </button>
                         )}
 
@@ -117,9 +118,9 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
                                 className="btn btn-success"
                                 onClick={startGame}
                                 disabled={!allReady}
-                                title={!allReady ? 'All players must be ready' : 'Start the game'}
+                                title={!allReady ? UI_MESSAGES.lobby.allPlayersMustBeReady : UI_MESSAGES.lobby.startTheGame}
                             >
-                                Start Game
+                                {UI_MESSAGES.buttons.startGame}
                             </button>
                         )}
 
@@ -127,7 +128,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
                             className="btn btn-danger"
                             onClick={leaveRoom}
                         >
-                            Leave Room
+                            {UI_MESSAGES.buttons.leaveRoom}
                         </button>
                     </div>
 
@@ -147,14 +148,14 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
         return (
             <div className="modal show">
                 <div className="modal-content lobby-screen">
-                    <h1>🎮 Grabble</h1>
-                    <p className="subtitle">Scrabble with Gravity</p>
+                    <h1>{UI_MESSAGES.lobby.title}</h1>
+                    <p className="subtitle">{UI_MESSAGES.lobby.subtitle}</p>
 
                     <div className="connection-status">
                         {connected ? (
-                            <span className="connected">🟢 Connected to server</span>
+                            <span className="connected">{UI_MESSAGES.lobby.connected}</span>
                         ) : (
-                            <span className="disconnected">🔴 Connecting...</span>
+                            <span className="disconnected">{UI_MESSAGES.lobby.connecting}</span>
                         )}
                     </div>
 
@@ -164,23 +165,23 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
                             onClick={() => setMode('create')}
                             disabled={!connected}
                         >
-                            Create Room
+                            {UI_MESSAGES.buttons.createRoom}
                         </button>
                         <button
                             className="btn btn-secondary btn-large"
                             onClick={() => setMode('join')}
                             disabled={!connected}
                         >
-                            Join Room
+                            {UI_MESSAGES.buttons.joinRoom}
                         </button>
                         <div style={{ margin: '1rem 0', textAlign: 'center', fontSize: '0.9rem', color: '#999' }}>
-                            or
+                            {UI_MESSAGES.lobby.or}
                         </div>
                         <button
                             className="btn btn-solo btn-large"
                             onClick={onPlaySolo}
                         >
-                            Play Local
+                            {UI_MESSAGES.buttons.playLocal}
                         </button>
                     </div>
 
@@ -207,23 +208,23 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
         return (
             <div className="modal show">
                 <div className="modal-content lobby-screen">
-                    <h2>Create Room</h2>
+                    <h2>{UI_MESSAGES.buttons.createRoom}</h2>
 
                     <form onSubmit={handleCreate}>
                         <div className="form-group">
-                            <label>Your Name:</label>
+                            <label>{UI_MESSAGES.lobby.yourName}</label>
                             <input
                                 type="text"
                                 value={playerName}
                                 onChange={(e) => setPlayerName(e.target.value)}
-                                placeholder="Enter your name"
+                                placeholder={UI_MESSAGES.lobby.enterYourName}
                                 required
                                 autoFocus
                             />
                         </div>
 
                         <div className="form-group">
-                            <label>Target Score:</label>
+                            <label>{UI_MESSAGES.lobby.targetScore}</label>
                             <input
                                 type="number"
                                 value={targetScore}
@@ -240,20 +241,20 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
                                     checked={hintsEnabled}
                                     onChange={(e) => setHintsEnabled(e.target.checked)}
                                 />
-                                Enable Hints
+                                {UI_MESSAGES.lobby.enableHints}
                             </label>
                         </div>
 
                         <div className="form-actions">
                             <button type="submit" className="btn btn-primary">
-                                Create Room
+                                {UI_MESSAGES.buttons.createRoom}
                             </button>
                             <button
                                 type="button"
                                 className="btn btn-secondary"
                                 onClick={() => setMode('menu')}
                             >
-                                Back
+                                {UI_MESSAGES.buttons.back}
                             </button>
                         </div>
                     </form>
@@ -281,28 +282,28 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
         return (
             <div className="modal show">
                 <div className="modal-content lobby-screen">
-                    <h2>Join Room</h2>
+                    <h2>{UI_MESSAGES.buttons.joinRoom}</h2>
 
                     <form onSubmit={handleJoin}>
                         <div className="form-group">
-                            <label>Your Name:</label>
+                            <label>{UI_MESSAGES.lobby.yourName}</label>
                             <input
                                 type="text"
                                 value={playerName}
                                 onChange={(e) => setPlayerName(e.target.value)}
-                                placeholder="Enter your name"
+                                placeholder={UI_MESSAGES.lobby.enterYourName}
                                 required
                                 autoFocus
                             />
                         </div>
 
                         <div className="form-group">
-                            <label>Room Code:</label>
+                            <label>{UI_MESSAGES.lobby.roomCode}</label>
                             <input
                                 type="text"
                                 value={joinCode}
                                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                                placeholder="e.g. AB3K"
+                                placeholder={UI_MESSAGES.lobby.roomCodePlaceholder}
                                 maxLength={4}
                                 required
                                 style={{ textTransform: 'uppercase', letterSpacing: '0.2em' }}
@@ -311,14 +312,14 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
 
                         <div className="form-actions">
                             <button type="submit" className="btn btn-primary">
-                                Join Room
+                                {UI_MESSAGES.buttons.joinRoom}
                             </button>
                             <button
                                 type="button"
                                 className="btn btn-secondary"
                                 onClick={() => setMode('menu')}
                             >
-                                Back
+                                {UI_MESSAGES.buttons.back}
                             </button>
                         </div>
                     </form>

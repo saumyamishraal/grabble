@@ -23,6 +23,7 @@ import LobbyScreen from './components/LobbyScreen';
 import NewGameRequestModal from './components/NewGameRequestModal';
 import { useSocket } from './hooks/useSocket';
 import { getPlayerColor } from './utils/playerColors';
+import { UI_MESSAGES } from './constants/messages';
 
 // Dictionary loading function
 async function loadDictionary(): Promise<Set<string>> {
@@ -270,14 +271,17 @@ function App() {
           bonusType: 'diagonal' | 'emordnilap' | 'palindrome';
           score: number;
           reverseWord?: string;
+          playerId: number; // Track which player earned the bonus
         };
 
         const newBonusAnimations: BonusAnimation[] = [];
 
         for (let i = prevClaimedWordsLengthRef.current; i < currentLength; i++) {
           const claimedWord = claimedWords[i];
-          if (claimedWord && claimedWord.playerId === myGamePlayerId) {
+          if (claimedWord) {
             const bonuses = claimedWord.bonuses || [];
+            // Use the actual player ID from the claimed word, not just myGamePlayerId
+            const wordPlayerId = claimedWord.playerId;
 
             // Add bonuses in priority order: Diagonal → Emordnilap → Palindrome
             if (bonuses.includes('diagonal')) {
@@ -285,7 +289,8 @@ function App() {
                 word: claimedWord.word,
                 positions: claimedWord.positions,
                 bonusType: 'diagonal',
-                score: claimedWord.score
+                score: claimedWord.score,
+                playerId: wordPlayerId
               });
             }
             if (bonuses.includes('emordnilap')) {
@@ -295,7 +300,8 @@ function App() {
                 positions: claimedWord.positions,
                 bonusType: 'emordnilap',
                 score: claimedWord.score,
-                reverseWord: reverseWord || undefined
+                reverseWord: reverseWord || undefined,
+                playerId: wordPlayerId
               });
             }
             if (bonuses.includes('palindrome')) {
@@ -303,7 +309,8 @@ function App() {
                 word: claimedWord.word,
                 positions: claimedWord.positions,
                 bonusType: 'palindrome',
-                score: claimedWord.score
+                score: claimedWord.score,
+                playerId: wordPlayerId
               });
             }
           }
@@ -331,6 +338,9 @@ function App() {
           setDiagonalPositions([]);
 
           // Show the appropriate animation based on bonus type
+          // Use the player ID from the bonus animation, not myGamePlayerId
+          const bonusPlayerColor = getPlayerColor(bonusAnim.playerId);
+          
           if (bonusAnim.bonusType === 'diagonal') {
             setDiagonalTiles(tileKeys);
             setDiagonalPositions(bonusAnim.positions);
@@ -338,7 +348,7 @@ function App() {
               show: true,
               points: bonusAnim.score,
               word: bonusAnim.word,
-              playerColor: getPlayerColor(myGamePlayerId)
+              playerColor: bonusPlayerColor
             });
             animationDuration = 2500;
 
@@ -355,7 +365,7 @@ function App() {
               points: bonusAnim.score,
               word: bonusAnim.word,
               reverseWord: bonusAnim.reverseWord || '',
-              playerColor: getPlayerColor(myGamePlayerId)
+              playerColor: bonusPlayerColor
             });
             animationDuration = 3000;
 
@@ -370,7 +380,7 @@ function App() {
               show: true,
               points: bonusAnim.score,
               word: bonusAnim.word,
-              playerColor: getPlayerColor(myGamePlayerId)
+              playerColor: bonusPlayerColor
             });
             animationDuration = 2500;
 
@@ -621,14 +631,14 @@ function App() {
     })() : gameManager?.getCurrentPlayer()?.rack || [];
 
     if (!trie || !currentState || currentRack.length === 0) {
-      setHintMessage('⚠️ Cannot get hint right now');
+      setHintMessage(UI_MESSAGES.hints.cannotGetHint);
       return;
     }
 
     // Ban hints until at least one word has been claimed (first complete turn finished)
     const hasCompletedTurns = (currentState.claimedWords?.length || 0) > 0;
     if (!hasCompletedTurns) {
-      setHintMessage('⚠️ Hints are not available until a word has been played. Complete your first move!');
+      setHintMessage(UI_MESSAGES.hints.hintsNotAvailable);
       return;
     }
 
@@ -665,7 +675,7 @@ function App() {
 
       switch (hintLevel) {
         case 0:
-          setHintMessage('✅ Words are possible! Click again for more detail.');
+          setHintMessage(UI_MESSAGES.hints.wordsPossible);
           // Clear highlighting at level 0
           setHintedTileIndices([]);
           setHintedColumns([]);
@@ -673,35 +683,31 @@ function App() {
         case 1:
           // Show number of tiles needed (depth indicator)
           const tileCount = result.usefulTiles?.length || 1;
-          if (tileCount === 2) {
-            setHintMessage('💡 Highlighted tiles can form a word together (2-tile move).');
-          } else {
-            setHintMessage('💡 Highlighted tile can form a word.');
-          }
+          setHintMessage(UI_MESSAGES.hints.highlightedTilesCanFormWord(tileCount));
           break;
         case 2:
           // Partial word hint (less obvious)
           if (result.partialWord) {
-            setHintMessage(`🔤 Look for: ${result.partialWord} (${result.wordLength} letters)`);
+            setHintMessage(UI_MESSAGES.hints.lookForWord(result.partialWord, result.wordLength || 0));
           } else {
-            setHintMessage(`🔤 Look for a ${result.wordLength || '?'}-letter word`);
+            setHintMessage(UI_MESSAGES.hints.lookForLength(result.wordLength || 0));
           }
           break;
         case 3:
           // Column hint (penultimate - most helpful before full reveal)
           if (result.targetColumns && result.targetColumns.length >= 2) {
-            setHintMessage(`📍 Place tiles in columns ${result.targetColumns[0] + 1} and ${result.targetColumns[1] + 1}`);
+            setHintMessage(UI_MESSAGES.hints.placeTilesInColumns(result.targetColumns[0] + 1, result.targetColumns[1] + 1));
           } else {
-            setHintMessage(`📍 Place highlighted tile in column ${(result.targetColumns?.[0] ?? 0) + 1}`);
+            setHintMessage(UI_MESSAGES.hints.placeTileInColumn((result.targetColumns?.[0] ?? 0) + 1));
           }
           break;
         case 4:
           if (result.fullSolution) {
             const sol = result.fullSolution;
             if (sol.depth === 2) {
-              setHintMessage(`🎯 Word: ${sol.word} (Columns ${sol.columns[0] + 1}, ${sol.columns[1] + 1})`);
+              setHintMessage(UI_MESSAGES.hints.fullSolutionWord(sol.word, [sol.columns[0] + 1, sol.columns[1] + 1]));
             } else {
-              setHintMessage(`🎯 Word: ${sol.word} (Column ${sol.column + 1})`);
+              setHintMessage(UI_MESSAGES.hints.fullSolutionWord(sol.word, [sol.column + 1]));
             }
           }
           break;
@@ -791,7 +797,7 @@ function App() {
   // Handler for requesting to clear the board (placeholder for future implementation)
   const handleClearBoard = () => {
     // TODO: Implement board clearing functionality
-    showError('Board clearing functionality coming soon!');
+    showError(UI_MESSAGES.errors.boardClearingComingSoon);
   };
 
   // Handler for toggling sound
@@ -974,7 +980,7 @@ function App() {
       console.log('Tile placed successfully at:', { x, y });
     } catch (error) {
       console.error('Error placing tile:', error);
-      showError(`Error placing tile: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError(UI_MESSAGES.errors.errorPlacingTile(error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -999,13 +1005,13 @@ function App() {
     }
 
     if (tile.playerId !== currentPlayer.id) {
-      showError('You can only remove your own tiles.');
+      showError(UI_MESSAGES.errors.cannotRemoveOwnTiles);
       return;
     }
 
     // Check if it's the current player's turn (can only remove during active turn)
     if (state.currentPlayerId !== currentPlayer.id) {
-      showError('You can only remove tiles during your turn.');
+      showError(UI_MESSAGES.errors.cannotRemoveDuringTurn);
       return;
     }
 
@@ -1111,7 +1117,7 @@ function App() {
       }); // Close requestAnimationFrame
     } catch (error) {
       console.error('Error removing tile:', error);
-      showError(`Error removing tile: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError(UI_MESSAGES.errors.errorRemovingTile(error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -1136,20 +1142,20 @@ function App() {
     }
 
     if (tile.playerId !== currentPlayer.id) {
-      showError('You can only move your own tiles.');
+      showError(UI_MESSAGES.errors.cannotMoveOwnTiles);
       return;
     }
 
     // Check if it's the current player's turn
     if (state.currentPlayerId !== currentPlayer.id) {
-      showError('You can only move tiles during your turn.');
+      showError(UI_MESSAGES.errors.cannotMoveDuringTurn);
       return;
     }
 
     // Only allow moving tiles placed in THIS turn
     const wasPlacedThisTurn = tilesPlacedThisTurn.some(pos => pos.x === fromX && pos.y === fromY);
     if (!wasPlacedThisTurn) {
-      showError('You can only move tiles placed this turn.');
+      showError(UI_MESSAGES.errors.cannotMoveTilesPlacedThisTurn);
       return;
     }
 
@@ -1255,7 +1261,7 @@ function App() {
       }
     } catch (error) {
       console.error('Error moving tile:', error);
-      showError(`Error moving tile: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError(UI_MESSAGES.errors.errorMovingTile(error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -1314,20 +1320,20 @@ function App() {
       if (!currentState) return;
 
       if (!dictionaryLoaded || dictionary.size === 0) {
-        showError('Dictionary is still loading. Please wait...');
+        showError(UI_MESSAGES.errors.dictionaryLoading);
         return;
       }
 
       // 1. Require word selection OR tile placement (but actually must select word)
       if (selectedWords.length === 0) {
-        showError('Please select at least one word by dragging from start to finish before submitting.');
+        showError(UI_MESSAGES.errors.selectWordBeforeSubmit);
         return;
       }
 
       // 2. Validate selected words are straight lines
       const validWords = selectedWords.filter(positions => isValidWordLine(positions));
       if (validWords.length === 0) {
-        showError('Please select valid words (straight lines of 3+ tiles) by dragging.');
+        showError(UI_MESSAGES.errors.selectValidWords);
         return;
       }
 
@@ -1343,7 +1349,7 @@ function App() {
         );
 
         if (!hasNewTile) {
-          showError('At least one selected word must contain a tile you placed this turn.');
+          showError(UI_MESSAGES.errors.mustContainNewTile);
           return;
         }
 
@@ -1365,14 +1371,14 @@ function App() {
             const tile = currentState.board[pos.y][pos.x];
             return tile ? tile.letter : '?';
           }).join(', ');
-          showError(`All tiles placed this turn must be part of a selected word. The following tiles are not part of any selected word: ${unclaimedLetters.toUpperCase()}`);
+          showError(UI_MESSAGES.errors.unclaimedTiles(unclaimedLetters.toUpperCase()));
           return;
         }
       } else {
         // If no tiles placed this turn, user cannot submit (unless pass? but submit usually implies playing)
         // Actually, if selectedWords > 0 but no placed tiles, it's usually invalid unless modifiable board.
         // In Scrabble, you must place tiles OR swap OR pass. You can't just select existing words.
-        showError('You must place at least one tile to make a move.');
+        showError(UI_MESSAGES.errors.mustPlaceTile);
         return;
       }
 
@@ -1396,7 +1402,7 @@ function App() {
     const hasPlacedTiles = tilesPlacedThisTurn.length > 0 || pendingPlacements.length > 0;
 
     if (!hasPlacedTiles && selectedWords.length === 0) {
-      showError('Please place tiles and select at least one word by dragging before submitting.');
+      showError(UI_MESSAGES.errors.placeTilesAndSelectWord);
       return;
     }
 
@@ -1443,13 +1449,13 @@ function App() {
       console.log('Submit move - dictionary size:', dictionary.size, 'dictionary loaded:', dictionaryLoaded);
 
       if (!dictionaryLoaded || dictionary.size === 0) {
-        showError('Dictionary is still loading. Please wait...');
+        showError(UI_MESSAGES.errors.dictionaryLoading);
         return;
       }
 
       // Require word selection before submitting
       if (selectedWords.length === 0) {
-        showError('Please select at least one word by dragging from start to finish before submitting.');
+        showError(UI_MESSAGES.errors.selectWordBeforeSubmit);
         return;
       }
 
@@ -1459,7 +1465,7 @@ function App() {
         const validWords = selectedWords.filter(positions => isValidWordLine(positions));
 
         if (validWords.length === 0) {
-          showError('Please select valid words (straight lines of 3+ tiles) by dragging.');
+          showError(UI_MESSAGES.errors.selectValidWords);
           return;
         }
 
@@ -1472,7 +1478,7 @@ function App() {
           );
 
           if (!hasNewTile) {
-            showError('At least one selected word must contain a tile you placed this turn.');
+            showError(UI_MESSAGES.errors.mustContainNewTile);
             return;
           }
 
@@ -1493,7 +1499,7 @@ function App() {
               const tile = gameEngineState.board[pos.y][pos.x];
               return tile ? tile.letter : '?';
             }).join(', ');
-            showError(`All tiles placed this turn must be part of a selected word. The following tiles are not part of any selected word: ${unclaimedLetters.toUpperCase()}`);
+            showError(UI_MESSAGES.errors.unclaimedTiles(unclaimedLetters.toUpperCase()));
             return;
           }
         }
@@ -1512,7 +1518,7 @@ function App() {
         });
 
         if (dictionary.size === 0) {
-          showError('Dictionary not loaded yet. Please wait...');
+          showError(UI_MESSAGES.errors.dictionaryNotLoaded);
           return;
         }
 
@@ -1527,9 +1533,9 @@ function App() {
             .filter((error): error is string => error !== undefined && error.length > 0);
 
           if (errorMessages.length > 0) {
-            showError('Invalid word claims: ' + errorMessages.join('. '));
+            showError(UI_MESSAGES.errors.invalidWordClaims(errorMessages.join('. ')));
           } else {
-            showError('Invalid word claims. Please check your word selection.');
+            showError(UI_MESSAGES.errors.invalidWordClaimsGeneric);
           }
           return;
         }
@@ -1728,7 +1734,7 @@ function App() {
         const winnerId = engine.checkWinCondition();
         if (winnerId !== null) {
           const winner = gameManager.getPlayer(winnerId);
-          showError(`Game Over! ${winner?.name} wins with ${winner?.score} points!`);
+          showError(UI_MESSAGES.errors.gameOver(winner?.name || 'Unknown', winner?.score || 0));
         }
       }
 
@@ -1737,19 +1743,19 @@ function App() {
 
     } catch (error) {
       console.error('Error submitting move:', error);
-      showError('Error: ' + (error as Error).message);
+      showError(UI_MESSAGES.errors.errorSubmittingMove((error as Error).message));
     }
   };
 
   const handleSwapTiles = () => {
     if (selectedTiles.length === 0) {
-      showError('Please select tiles to swap.');
+      showError(UI_MESSAGES.errors.selectTilesToSwap);
       return;
     }
 
     // Check if we have the necessary components for local game
     if (!isMultiplayer && (!gameManager || !engine)) {
-      showError('Game not initialized.');
+      showError(UI_MESSAGES.errors.gameNotInitialized);
       return;
     }
 
@@ -1804,7 +1810,7 @@ function App() {
       }
     } catch (error) {
       console.error('Error swapping tiles:', error);
-      showError(`Error swapping tiles: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError(UI_MESSAGES.errors.errorSwappingTiles(error instanceof Error ? error.message : 'Unknown error'));
       setShowSwapConfirm(false);
     }
   };
@@ -1899,12 +1905,13 @@ function App() {
       // 1. It's a blank tile
       // 2. It belongs to current player (me)
       // 3. It's not locked (can edit until turn is submitted)
-      // 4. It was placed this turn (or is my tile during my turn)
-      if (tile && tile.letter === ' ' &&
-        tile.playerId === myIdx &&
-        !tile.isBlankLocked &&
-        isMyTurn &&
-        (finalTilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y) || tile.playerId === myIdx)) {
+      // 4. It's my turn
+      // Allow editing any blank tile that belongs to the player during their turn
+      if (tile && 
+          tile.letter === ' ' &&
+          tile.playerId === myIdx &&
+          !tile.isBlankLocked &&
+          isMyTurn) {
         setBlankTileModal({
           isOpen: true,
           position: { x, y },
@@ -1920,16 +1927,20 @@ function App() {
     const state = engine.getState();
     const tile = state.board[y][x];
     const currentPlayer = gameManager.getCurrentPlayer();
+    const isCurrentPlayerTurn = state.currentPlayerId === currentPlayer.id;
 
     // Only allow editing if:
     // 1. It's a blank tile
     // 2. It belongs to current player
     // 3. It's not locked (can edit until turn is submitted)
-    // 4. It was placed this turn
-    if (tile && tile.letter === ' ' &&
-      tile.playerId === currentPlayer.id &&
-      !tile.isBlankLocked &&
-      tilesPlacedThisTurn.some(pos => pos.x === x && pos.y === y)) {
+    // 4. It's the current player's turn
+    // Allow editing any blank tile that belongs to the player during their turn (not just ones placed this turn)
+    // This allows re-editing blank tiles before submitting
+    if (tile && 
+        tile.letter === ' ' &&
+        tile.playerId === currentPlayer.id &&
+        !tile.isBlankLocked &&
+        isCurrentPlayerTurn) {
       setBlankTileModal({
         isOpen: true,
         position: { x, y },

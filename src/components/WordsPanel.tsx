@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ClaimedWord, Player } from '../types';
 import { getPlayerColor } from '../utils/playerColors';
+import { UI_MESSAGES } from '../constants/messages';
 
 interface WordsPanelProps {
   claimedWords: ClaimedWord[];
@@ -16,11 +17,11 @@ const WordsPanel: React.FC<WordsPanelProps> = ({ claimedWords, players, classNam
 
   return (
     <div className={`words-panel ${className || ''}`}>
-      <h3>Claimed Words</h3>
+      <h3>{UI_MESSAGES.words.claimedWords}</h3>
       <div className="words-list">
         {claimedWords.length === 0 ? (
           <div style={{ color: '#999', fontStyle: 'italic' }}>
-            No words claimed yet
+            {UI_MESSAGES.words.noWordsClaimed}
           </div>
         ) : (
           claimedWords.map((cw, index) => {

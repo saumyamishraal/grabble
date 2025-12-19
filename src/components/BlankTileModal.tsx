@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { UI_MESSAGES } from '../constants/messages';
 
 interface BlankTileModalProps {
   isOpen: boolean;
@@ -44,14 +45,14 @@ const BlankTileModal: React.FC<BlankTileModalProps> = ({
   return (
     <div className="modal show" onClick={onCancel}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h2>Enter Letter for Blank Tile</h2>
+        <h2>{UI_MESSAGES.blankTile.title}</h2>
         <p style={{ marginBottom: '1rem', color: '#666' }}>
-          What letter should this blank tile represent?
+          {UI_MESSAGES.blankTile.description}
         </p>
         
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>Letter:</label>
+            <label>{UI_MESSAGES.blankTile.letter}</label>
             <input
               type="text"
               value={letter}
@@ -81,7 +82,7 @@ const BlankTileModal: React.FC<BlankTileModalProps> = ({
               onClick={onCancel}
               style={{ flex: 1 }}
             >
-              Cancel
+              {UI_MESSAGES.buttons.cancel}
             </button>
             <button
               type="submit"
@@ -89,7 +90,7 @@ const BlankTileModal: React.FC<BlankTileModalProps> = ({
               disabled={!letter || letter.length !== 1 || !/[A-Z]/.test(letter)}
               style={{ flex: 1 }}
             >
-              Confirm
+              {UI_MESSAGES.buttons.confirm}
             </button>
           </div>
         </form>
