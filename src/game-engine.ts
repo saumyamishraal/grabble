@@ -457,10 +457,48 @@ export class GrabbleEngine {
     }
 
     /**
+     * Clear the board for a new round while preserving player scores
+     * - Clears all tiles from the board
+     * - Clears claimed words list
+     * - Creates a new shuffled tile bag
+     * - Refills all player racks
+     * - Resets to first player's turn
+     */
+    clearBoard(): void {
+        // Clear the board
+        this.state.board = GrabbleEngine.createEmptyBoard();
+
+        // Clear claimed words
+        this.state.claimedWords = [];
+
+        // Create new tile bag
+        this.state.tileBag = GrabbleEngine.createTileBag();
+
+        // Clear and refill all player racks
+        for (const player of this.state.players) {
+            player.rack = [];
+            this.refillPlayerRack(player.id);
+        }
+
+        // Reset to first player's turn
+        const firstPlayer = this.state.players.find(p => p.turnOrder === 0);
+        if (firstPlayer) {
+            this.state.currentPlayerId = firstPlayer.id;
+        }
+
+        console.log('🧹 Board cleared! Scores preserved, starting new round.');
+    }
+
+    /**
      * Check win condition
      * Returns winner ID if game is won, null otherwise
      */
     checkWinCondition(): number | null {
+        // No win condition in solo mode or when targetScore is 0 (endless)
+        if (this.state.gameMode === 'solo' || this.state.targetScore === 0) {
+            return null;
+        }
+
         for (const player of this.state.players) {
             if (player.score >= this.state.targetScore) {
                 this.state.gameStatus = 'finished';

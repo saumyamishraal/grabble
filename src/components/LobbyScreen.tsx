@@ -2,9 +2,11 @@
  * LobbyScreen - Create/Join Room UI for multiplayer
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Room, RoomPlayer } from '../server-types';
 import { UI_MESSAGES } from '../constants/messages';
+import { useAuth } from '../contexts/AuthContext';
+import AuthButton from './AuthButton';
 
 interface LobbyScreenProps {
     // Connection state
@@ -19,12 +21,15 @@ interface LobbyScreenProps {
     playerId: string | null;
 
     // Actions
-    createRoom: (playerName: string, targetScore?: number, hintsEnabled?: boolean) => void;
-    joinRoom: (roomCode: string, playerName: string) => void;
-    leaveRoom: () => void;
+    createRoom: (playerName: string, targetScore?: number, hintsEnabled?: boolean, uid?: string, photoURL?: string) => void;
+    joinRoom: (roomCode: string, playerName: string, uid?: string, photoURL?: string) => void;
+    leaveRoom: (uid?: string) => void;
     setReady: (ready: boolean) => void;
     startGame: () => void;
-    onPlaySolo: () => void; // Trigger local single-player game
+    onPlaySolo: () => void;
+
+    // Active game (for rejoin)
+    getActiveGame: (uid: string) => Promise<{ roomCode: string; playerId: string } | null>;
 }
 
 type LobbyMode = 'menu' | 'create' | 'join';
@@ -42,13 +47,55 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
     leaveRoom,
     setReady,
     startGame,
-    onPlaySolo
+    onPlaySolo,
+    getActiveGame
 }) => {
+    const { user } = useAuth();
     const [mode, setMode] = useState<LobbyMode>('menu');
     const [playerName, setPlayerName] = useState('');
     const [targetScore, setTargetScore] = useState(100);
     const [joinCode, setJoinCode] = useState('');
     const [hintsEnabled, setHintsEnabled] = useState(true);
+
+    // Active game check for rejoin
+    const [activeGame, setActiveGame] = useState<{ roomCode: string } | null>(null);
+    const [checkingActiveGame, setCheckingActiveGame] = useState(true);
+
+    // Pre-fill player name from Google profile
+    useEffect(() => {
+        if (user?.displayName && !playerName) {
+            setPlayerName(user.displayName);
+        }
+    }, [user, playerName]);
+
+    // Check for active game on mount
+    useEffect(() => {
+        const checkActiveGame = async () => {
+            if (user?.uid && !roomCode) {
+                setCheckingActiveGame(true);
+                const active = await getActiveGame(user.uid);
+                setActiveGame(active);
+                setCheckingActiveGame(false);
+            } else {
+                setCheckingActiveGame(false);
+            }
+        };
+        checkActiveGame();
+    }, [user, roomCode, getActiveGame]);
+
+    const handleRejoin = () => {
+        if (activeGame && playerName.trim()) {
+            joinRoom(activeGame.roomCode, playerName.trim(), user?.uid, user?.photoURL || undefined);
+        }
+    };
+
+    const handleDismissRejoin = async () => {
+        if (user?.uid) {
+            // Clear the active game from Firebase
+            leaveRoom(user.uid);
+        }
+        setActiveGame(null);
+    };
 
     // If in a room, show waiting room
     if (roomCode && room) {
@@ -126,7 +173,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
 
                         <button
                             className="btn btn-danger"
-                            onClick={leaveRoom}
+                            onClick={() => leaveRoom(user?.uid)}
                         >
                             {UI_MESSAGES.buttons.leaveRoom}
                         </button>
@@ -148,16 +195,48 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
         return (
             <div className="modal show">
                 <div className="modal-content lobby-screen">
-                    <h1>{UI_MESSAGES.lobby.title}</h1>
-                    <p className="subtitle">{UI_MESSAGES.lobby.subtitle}</p>
+                    <h1 style={{ margin: 0, textAlign: 'center' }}>{UI_MESSAGES.lobby.title}</h1>
+                    <p className="subtitle" style={{ margin: '5px 0 15px 0', textAlign: 'center' }}>{UI_MESSAGES.lobby.subtitle}</p>
 
-                    <div className="connection-status">
-                        {connected ? (
-                            <span className="connected">{UI_MESSAGES.lobby.connected}</span>
-                        ) : (
-                            <span className="disconnected">{UI_MESSAGES.lobby.connecting}</span>
-                        )}
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+                        <AuthButton variant="full" />
                     </div>
+
+                    {/* Rejoin prompt */}
+                    {!checkingActiveGame && activeGame && (
+                        <div style={{
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            borderRadius: '12px',
+                            padding: '16px',
+                            marginBottom: '20px',
+                            color: 'white',
+                            textAlign: 'center'
+                        }}>
+                            <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>
+                                🎮 You have an active game!
+                            </div>
+                            <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '12px' }}>
+                                Room: <strong>{activeGame.roomCode}</strong>
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                                <button
+                                    className="btn"
+                                    style={{ background: 'white', color: '#764ba2', fontWeight: 600 }}
+                                    onClick={handleRejoin}
+                                    disabled={!playerName.trim()}
+                                >
+                                    Rejoin Game
+                                </button>
+                                <button
+                                    className="btn"
+                                    style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.3)' }}
+                                    onClick={handleDismissRejoin}
+                                >
+                                    Leave Game
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="menu-buttons">
                         <button
@@ -201,7 +280,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
         const handleCreate = (e: React.FormEvent) => {
             e.preventDefault();
             if (playerName.trim()) {
-                createRoom(playerName.trim(), targetScore, hintsEnabled);
+                createRoom(playerName.trim(), targetScore, hintsEnabled, user?.uid, user?.photoURL || undefined);
             }
         };
 
@@ -226,11 +305,20 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
                         <div className="form-group">
                             <label>{UI_MESSAGES.lobby.targetScore}</label>
                             <input
-                                type="number"
+                                type="text"
+                                inputMode="numeric"
                                 value={targetScore}
-                                onChange={(e) => setTargetScore(parseInt(e.target.value) || 100)}
-                                min="50"
-                                max="500"
+                                onChange={(e) => setTargetScore(e.target.value as any)}
+                                onBlur={(e) => {
+                                    const val = parseInt(e.target.value) || 100;
+                                    setTargetScore(Math.max(10, Math.min(500, val)));
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        const val = parseInt((e.target as HTMLInputElement).value) || 100;
+                                        setTargetScore(Math.max(10, Math.min(500, val)));
+                                    }
+                                }}
                             />
                         </div>
 
@@ -275,7 +363,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
         const handleJoin = (e: React.FormEvent) => {
             e.preventDefault();
             if (playerName.trim() && joinCode.trim()) {
-                joinRoom(joinCode.trim().toUpperCase(), playerName.trim());
+                joinRoom(joinCode.trim().toUpperCase(), playerName.trim(), user?.uid, user?.photoURL || undefined);
             }
         };
 

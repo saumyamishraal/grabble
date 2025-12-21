@@ -164,6 +164,39 @@ grabble/
 - Mobile app version
 - AI opponent for solo mode
 
+### Phase 5: Google Authentication (Planned)
+**Goal:** Allow users to sign in with Gmail to save progress and high scores across devices.
+
+**Implementation Steps:**
+1. **Enable Firebase Auth**
+   - Enable Google Sign-In provider in Firebase Console → Authentication
+   - Configure OAuth consent screen in Google Cloud Console
+
+2. **Add Firebase Auth SDK**
+   ```bash
+   npm install firebase  # Already installed
+   ```
+   - Import `getAuth`, `signInWithPopup`, `GoogleAuthProvider` from `firebase/auth`
+
+3. **Create Auth Context**
+   - Create `src/contexts/AuthContext.tsx`
+   - Provide `user`, `signIn()`, `signOut()` throughout app
+   - Persist auth state with `onAuthStateChanged` listener
+
+4. **Update UI**
+   - Add "Sign in with Google" button on home/lobby screen
+   - Show user avatar and name when signed in
+   - Add sign out option in menu
+
+5. **Cloud High Scores**
+   - Store high scores at `users/{uid}/highScore` in Firebase
+   - Sync local storage ↔ Firebase on sign in
+   - Show leaderboard of top scores (optional)
+
+6. **Multiplayer Identity**
+   - Use Google profile name as default player name
+   - Associate room players with UIDs for persistence
+
 ## Key Design Decisions
 
 1. **React for UI**: Much easier than vanilla TypeScript DOM manipulation

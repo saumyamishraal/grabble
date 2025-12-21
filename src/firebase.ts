@@ -1,10 +1,12 @@
 /**
  * Firebase Configuration for Grabble
  * Realtime Database for multiplayer game state synchronization
+ * Authentication for Google Sign-In
  */
 
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, get, onValue, push, update, remove, DatabaseReference, DataSnapshot } from 'firebase/database';
+import { getAuth, signInWithPopup, signOut as firebaseSignOut, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -21,10 +23,16 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
+const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
 
 // Export database utilities
 export { database, ref, set, get, onValue, push, update, remove };
 export type { DatabaseReference, DataSnapshot };
+
+// Export auth utilities
+export { auth, googleProvider, signInWithPopup, firebaseSignOut, onAuthStateChanged };
+export type { User };
 
 // Helper to generate room codes
 export function generateRoomCode(): string {
@@ -44,6 +52,13 @@ export const dbPaths = {
     roomPlayer: (roomCode: string, playerId: string) => `rooms/${roomCode}/players/${playerId}`,
     roomGame: (roomCode: string) => `rooms/${roomCode}/game`,
     roomGameState: (roomCode: string) => `rooms/${roomCode}/game/state`,
+    // User data paths
+    users: () => 'users',
+    user: (uid: string) => `users/${uid}`,
+    userHighScore: (uid: string) => `users/${uid}/highScore`,
+    // Active games (for rejoin)
+    activeGames: () => 'activeGames',
+    activeGame: (uid: string) => `activeGames/${uid}`,
 };
 
-console.log('🔥 Firebase initialized for Grabble');
+console.log('🔥 Firebase initialized for Grabble (with Auth)');

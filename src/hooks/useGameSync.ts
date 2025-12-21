@@ -48,9 +48,9 @@ interface UseGameSyncReturn {
     clearNewGameDeclined: () => void;
 
     // Room actions
-    createRoom: (playerName: string, targetScore?: number, hintsEnabled?: boolean) => void;
-    joinRoom: (roomCode: string, playerName: string) => void;
-    leaveRoom: () => void;
+    createRoom: (playerName: string, targetScore?: number, hintsEnabled?: boolean, uid?: string, photoURL?: string) => void;
+    joinRoom: (roomCode: string, playerName: string, uid?: string, photoURL?: string) => void;
+    leaveRoom: (uid?: string) => void;
     setReady: (ready: boolean) => void;
     startGame: () => void;
 
@@ -66,6 +66,9 @@ interface UseGameSyncReturn {
 
     // Full game state sync (for batch update mode)
     syncGameState: (newState: GameState) => Promise<void>;
+
+    // Active game (for rejoin)
+    getActiveGame: (uid: string) => Promise<{ roomCode: string; playerId: string } | null>;
 }
 
 export function useGameSync(): UseGameSyncReturn {
@@ -217,8 +220,55 @@ export function useGameSync(): UseGameSyncReturn {
         unsubscribeGameRef.current = unsubscribe;
     }, []);
 
+    // Active game tracking helpers (for rejoin functionality)
+    const setActiveGame = useCallback(async (code: string, uid?: string) => {
+        if (!uid) return;
+        try {
+            await set(ref(database, dbPaths.activeGame(uid)), {
+                roomCode: code,
+                playerId,
+                joinedAt: Date.now()
+            });
+            console.log('💾 Active game saved for rejoin:', code);
+        } catch (err) {
+            console.error('Failed to save active game:', err);
+        }
+    }, [playerId]);
+
+    const clearActiveGame = useCallback(async (uid?: string) => {
+        if (!uid) return;
+        try {
+            await remove(ref(database, dbPaths.activeGame(uid)));
+            console.log('🗑️ Active game cleared');
+        } catch (err) {
+            console.error('Failed to clear active game:', err);
+        }
+    }, []);
+
+    const getActiveGame = useCallback(async (uid: string): Promise<{ roomCode: string; playerId: string } | null> => {
+        try {
+            const snapshot = await get(ref(database, dbPaths.activeGame(uid)));
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                // Check if the room still exists
+                const roomSnapshot = await get(ref(database, dbPaths.room(data.roomCode)));
+                if (roomSnapshot.exists()) {
+                    return data;
+                } else {
+                    // Room no longer exists, clean up
+                    await remove(ref(database, dbPaths.activeGame(uid)));
+                    return null;
+                }
+            }
+            return null;
+        } catch (err) {
+            console.error('Failed to get active game:', err);
+            return null;
+        }
+    }, []);
+
     // Room actions
-    const createRoom = useCallback(async (playerName: string, targetScore = 100, hintsEnabled = true) => {
+    const createRoom = useCallback(async (playerName: string, targetScore = 100, hintsEnabled = true, uid?: string, photoURL?: string) => {
         if (!playerId) return;
 
         try {
@@ -228,7 +278,9 @@ export function useGameSync(): UseGameSyncReturn {
                 name: playerName,
                 isReady: false,
                 isHost: true,
-                color: PLAYER_COLORS[0]
+                color: PLAYER_COLORS[0],
+                ...(uid && { uid }),
+                ...(photoURL && { photoURL })
             };
 
             const roomData = {
@@ -245,14 +297,16 @@ export function useGameSync(): UseGameSyncReturn {
             await set(ref(database, dbPaths.room(code)), roomData);
             setRoomCode(code);
             subscribeToRoom(code);
+            // Track active game for rejoin functionality
+            await setActiveGame(code, uid);
             console.log('📦 Room created:', code);
         } catch (err) {
             setError('Failed to create room');
             console.error(err);
         }
-    }, [playerId, subscribeToRoom]);
+    }, [playerId, subscribeToRoom, setActiveGame]);
 
-    const joinRoom = useCallback(async (code: string, playerName: string) => {
+    const joinRoom = useCallback(async (code: string, playerName: string, uid?: string, photoURL?: string) => {
         if (!playerId) return;
 
         try {
@@ -278,20 +332,24 @@ export function useGameSync(): UseGameSyncReturn {
                 name: playerName,
                 isReady: false,
                 isHost: false,
-                color: PLAYER_COLORS[players.length]
+                color: PLAYER_COLORS[players.length],
+                ...(uid && { uid }),
+                ...(photoURL && { photoURL })
             };
 
             await set(ref(database, dbPaths.roomPlayer(upperCode, playerId)), player);
             setRoomCode(upperCode);
             subscribeToRoom(upperCode);
+            // Track active game for rejoin functionality
+            await setActiveGame(upperCode, uid);
             console.log('✅ Joined room:', upperCode);
         } catch (err) {
             setError('Failed to join room');
             console.error(err);
         }
-    }, [playerId, subscribeToRoom]);
+    }, [playerId, subscribeToRoom, setActiveGame]);
 
-    const leaveRoom = useCallback(async () => {
+    const leaveRoom = useCallback(async (uid?: string) => {
         if (!roomCode || !playerId) return;
 
         try {
@@ -312,12 +370,14 @@ export function useGameSync(): UseGameSyncReturn {
             setRoom(null);
             setRoomCode(null);
             setGameState(null);
+            // Clear active game reference
+            await clearActiveGame(uid);
             console.log('👋 Left room:', roomCode);
         } catch (err) {
             setError('Failed to leave room');
             console.error(err);
         }
-    }, [roomCode, playerId]);
+    }, [roomCode, playerId, clearActiveGame]);
 
     const setReady = useCallback(async (ready: boolean) => {
         if (!roomCode || !playerId) return;
@@ -492,6 +552,8 @@ export function useGameSync(): UseGameSyncReturn {
         setBlankLetter,
         requestNewGame,
         respondNewGame,
-        syncGameState
+        syncGameState,
+        // Active game (for rejoin)
+        getActiveGame
     };
 }

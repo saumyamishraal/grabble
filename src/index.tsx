@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import './styles.scss';
 import App from './App';
+import { AuthProvider } from './contexts/AuthContext';
 import reportWebVitals from './reportWebVitals';
 
 console.log('🚀 index.tsx loaded, attempting to render App...');
@@ -19,7 +20,9 @@ try {
   console.log('✅ Root created, rendering App...');
   root.render(
     <React.StrictMode>
-      <App />
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </React.StrictMode>
   );
   console.log('✅ App rendered successfully!');

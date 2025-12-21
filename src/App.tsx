@@ -7,7 +7,7 @@ import type { Tile, Position, WordClaim, Player, ClaimedWord } from './types';
 import { extractWordFromPositions, isValidWordLine, getReverseWord } from './word-detection';
 import { Trie, buildTrieFromDictionary, findFirstValidWord, getHintAtLevel, HintResult, HintSolution } from './hint-engine';
 import { initSounds, playTileDropSound } from './utils/sounds';
-import { getHighScore, updateHighScoreIfBetter } from './utils/highScore';
+import { useHighScore } from './hooks/useHighScore';
 import SetupModal from './components/SetupModal';
 import Navbar from './components/Navbar';
 import ScoreArea from './components/ScoreArea';
@@ -21,6 +21,7 @@ import BlankTileModal from './components/BlankTileModal';
 import BonusOverlay from './components/BonusOverlay';
 import LobbyScreen from './components/LobbyScreen';
 import NewGameRequestModal from './components/NewGameRequestModal';
+import WinScreen from './components/WinScreen';
 import { useGameSync } from './hooks/useGameSync';
 import { getPlayerColor } from './utils/playerColors';
 import { UI_MESSAGES } from './constants/messages';
@@ -91,6 +92,7 @@ function App() {
     clearNewGameRequest,
     clearNewGameDeclined,
     syncGameState,
+    getActiveGame,
   } = useGameSync();
 
   // Log which backend is active
@@ -151,7 +153,7 @@ function App() {
   // This engine is a local copy of the server state, updated optimistically during the player's turn
   const [localMultiplayerEngine, setLocalMultiplayerEngine] = useState<GrabbleEngine | null>(null);
   const [localMultiplayerRack, setLocalMultiplayerRack] = useState<Tile[]>([]); // Local copy of player's rack for optimistic updates
-  const lastSyncedTurnRef = useRef<number>(-1); // Track when we last synced from server to avoid re-syncing mid-turn
+  const lastSyncedTurnRef = useRef<string>(''); // Track state hash to detect any game state changes
 
   // Hint system state
   const [trie, setTrie] = useState<Trie | null>(null);
@@ -163,10 +165,19 @@ function App() {
   const [hintedColumns, setHintedColumns] = useState<number[]>([]);
   const cachedHintSolutionRef = useRef<HintSolution | null>(null);  // Cache raw solution (not level-specific result)
 
-  // Solo mode state
-  const [highScore, setHighScore] = useState<number>(getHighScore());
+  // Solo mode state - use cloud-synced high score
+  const { highScore, updateHighScore, loading: highScoreLoading } = useHighScore();
   const [soloGameOver, setSoloGameOver] = useState(false);
   const [isNewHighScore, setIsNewHighScore] = useState(false);
+
+  // Win screen state (multiplayer)
+  const [showWinScreen, setShowWinScreen] = useState(false);
+  const [winnerInfo, setWinnerInfo] = useState<{
+    name: string;
+    score: number;
+    targetScore: number;
+    allPlayers: { name: string; score: number }[];
+  } | null>(null);
 
   // Helper function to show error modal
   const showError = (message: string) => {
@@ -266,22 +277,28 @@ function App() {
       if (localMultiplayerEngine) {
         setLocalMultiplayerEngine(null);
         setLocalMultiplayerRack([]);
-        lastSyncedTurnRef.current = -1;
+        lastSyncedTurnRef.current = '';
       }
       return;
     }
 
     // Determine my game player ID
-    const myRoomPlayerIndex = room.players.findIndex(rp => rp.id === playerId);
+    const myRoomPlayerIndex = room.players.findIndex((rp: any) => rp.id === playerId);
     const myGamePlayerId = myRoomPlayerIndex !== -1 ? myRoomPlayerIndex : -1;
     const isMyTurn = firebaseGameState.currentPlayerId === myGamePlayerId;
 
     // Create a key representing the current server state version
-    // We sync from server when: turn number changes, or we haven't synced yet
-    const currentTurn = firebaseGameState.currentPlayerId;
-    const shouldSync = lastSyncedTurnRef.current !== currentTurn;
+    // We sync from server when the game state hash changes (any update from Firebase)
+    const stateHash = JSON.stringify({
+      currentPlayerId: firebaseGameState.currentPlayerId,
+      claimedWordsCount: firebaseGameState.claimedWords?.length || 0,
+      scores: firebaseGameState.players?.map((p: any) => p.score) || [],
+    });
+    const shouldSync = lastSyncedTurnRef.current !== stateHash;
 
     if (shouldSync) {
+      console.log('🔄 Firebase state changed, syncing...', { isMyTurn, stateHash });
+
       // Deep copy the game state for local engine
       const stateCopy = JSON.parse(JSON.stringify(firebaseGameState));
       const newLocalEngine = new GrabbleEngine(stateCopy);
@@ -296,10 +313,35 @@ function App() {
       setMultiplayerPlacementsThisTurn([]);
       setSelectedWords([]);
 
-      lastSyncedTurnRef.current = currentTurn;
-      console.log('🔄 Synced local multiplayer engine from server, turn:', currentTurn, 'isMyTurn:', isMyTurn);
+      lastSyncedTurnRef.current = stateHash;
+      console.log('✅ Synced local multiplayer engine from Firebase, turn:', firebaseGameState.currentPlayerId);
     }
   }, [isMultiplayer, firebaseGameState, room, playerId]);
+
+  // Detect win condition in multiplayer
+  useEffect(() => {
+    if (!isMultiplayer || !firebaseGameState || !room) return;
+
+    const targetScore = firebaseGameState.targetScore || 100;
+    const winningPlayer = firebaseGameState.players.find(p => p.score >= targetScore);
+
+    if (winningPlayer && !showWinScreen) {
+      // Find player name from room
+      const playerName = room.players[winningPlayer.id]?.name || `Player ${winningPlayer.id + 1}`;
+
+      setWinnerInfo({
+        name: playerName,
+        score: winningPlayer.score,
+        targetScore: targetScore,
+        allPlayers: firebaseGameState.players.map((p: any, idx: number) => ({
+          name: room.players[idx]?.name || `Player ${idx + 1}`,
+          score: p.score
+        }))
+      });
+      setShowWinScreen(true);
+      console.log('🏆 We have a winner!', playerName, 'with', winningPlayer.score, 'points');
+    }
+  }, [isMultiplayer, firebaseGameState, room, showWinScreen]);
 
   useEffect(() => {
     setHintLevel(0);
@@ -659,11 +701,12 @@ function App() {
     const manager = GameStateManager.createNewGame(numPlayers, playerNames, targetScore);
     const gameEngine = manager.getEngine();
 
-    // Set game settings on state
-    const state = manager.getState();
-    state.hintsEnabled = hintsEnabled;
-    state.gameMode = gameMode;
-    state.zenMode = zenMode;
+    // Set game settings on internal engine state (not on a copy)
+    // getState() returns a deep copy, so we access the internal state directly
+    const engineState = (gameEngine as any).state;
+    engineState.hintsEnabled = hintsEnabled;
+    engineState.gameMode = gameMode;
+    engineState.zenMode = zenMode;
 
     setGameManager(manager);
     setEngine(gameEngine);
@@ -782,19 +825,56 @@ function App() {
 
   // Handler for starting a new game from the menu
   const handleStartNewGame = () => {
+    // Show confirmation dialog
+    const confirmed = window.confirm('Are you sure you want to start a new game? The current game will be lost.');
+    if (!confirmed) return;
+
     if (isMultiplayer) {
-      // In multiplayer, request a new game
-      firebaseRequestNewGame();
-      setNewGameRequestModal({
-        isOpen: true,
-        mode: 'request_sent'
-      });
+      // In multiplayer, restart the game directly
+      // This will create a new game state with the same players
+      firebaseStartGame();
+      console.log('🎮 Starting new multiplayer game...');
     } else {
       // In single player, just restart
       if (gameManager) {
         handleStartGame(gameManager.getNumPlayers(), gameManager.getPlayerNames(), gameManager.getTargetScore());
       }
     }
+  };
+
+  // Win screen handlers
+  const handleContinuePlaying = async (newTargetScore: number) => {
+    // Update target score and continue playing
+    if (localMultiplayerEngine && isMultiplayer) {
+      const engineState = (localMultiplayerEngine as any).state;
+      engineState.targetScore = newTargetScore;
+      await syncGameState(localMultiplayerEngine.getState());
+      console.log('🎯 Updated target score to', newTargetScore, '- continuing game');
+    } else if (engine) {
+      // For local mode, update engine state directly
+      const engineState = (engine as any).state;
+      engineState.targetScore = newTargetScore;
+    }
+    setShowWinScreen(false);
+    setWinnerInfo(null);
+  };
+
+  const handleWinNewGame = () => {
+    setShowWinScreen(false);
+    setWinnerInfo(null);
+    if (isMultiplayer) {
+      firebaseStartGame();
+    } else if (gameManager) {
+      handleStartGame(gameManager.getNumPlayers(), gameManager.getPlayerNames(), gameManager.getTargetScore());
+    }
+  };
+
+  const handleWinGoHome = () => {
+    setShowWinScreen(false);
+    setWinnerInfo(null);
+    // Reset to lobby/home
+    leaveRoom();
+    setShowSetup(false);
   };
 
   // Watch for new game requests from other players
@@ -854,10 +934,38 @@ function App() {
     clearNewGameRequest();
   };
 
-  // Handler for requesting to clear the board (placeholder for future implementation)
-  const handleClearBoard = () => {
-    // TODO: Implement board clearing functionality
-    showError(UI_MESSAGES.errors.boardClearingComingSoon);
+  // Handler for requesting to clear the board (preserves scores, starts new round)
+  const handleClearBoard = async () => {
+    // Show confirmation dialog
+    const confirmed = window.confirm('Are you sure you want to clear the board? Your scores will be preserved, but the current round will be reset.');
+    if (!confirmed) return;
+
+    if (isMultiplayer && localMultiplayerEngine) {
+      // Multiplayer: clear board on local engine and sync to Firebase
+      localMultiplayerEngine.clearBoard();
+      console.log('🧹 Cleared board in multiplayer, syncing to Firebase...');
+      await syncGameState(localMultiplayerEngine.getState());
+
+      // Reset local UI state
+      setTilesPlacedThisTurn([]);
+      setMultiplayerPlacementsThisTurn([]);
+      setSelectedWords([]);
+      const myRoomPlayerIndex = room?.players.findIndex((rp: any) => rp.id === playerId) ?? -1;
+      if (myRoomPlayerIndex >= 0) {
+        const newRack = localMultiplayerEngine.getState().players[myRoomPlayerIndex]?.rack || [];
+        setLocalMultiplayerRack([...newRack]);
+      }
+    } else if (engine) {
+      // Local mode: clear board directly
+      engine.clearBoard();
+      console.log('🧹 Cleared board in local mode');
+
+      // Reset local UI state
+      setTilesPlacedThisTurn([]);
+      setPendingPlacements([]);
+      setSelectedWords([]);
+      setSelectedTiles([]);
+    }
   };
 
   // Handler for toggling sound
@@ -1755,6 +1863,22 @@ function App() {
 
       // Sync the complete local game state to Firebase after local validation
       if (localMultiplayerEngine) {
+        // Sync the local rack (with removed tiles) back to the engine state
+        // This is needed because tiles were removed from localMultiplayerRack but not the engine
+        const engineState = (localMultiplayerEngine as any).state;
+        if (engineState.players[myGamePlayerId]) {
+          engineState.players[myGamePlayerId].rack = [...localMultiplayerRack];
+          console.log('🔄 Synced local rack to engine, tiles remaining:', localMultiplayerRack.length);
+        }
+
+        // Refill the player's rack from tile bag
+        localMultiplayerEngine.refillPlayerRack(myGamePlayerId);
+        console.log('🃏 Refilled player rack to:', engineState.players[myGamePlayerId]?.rack.length, 'tiles');
+
+        // Advance to next player's turn
+        localMultiplayerEngine.advanceTurn();
+        console.log('👉 Advanced turn to player:', localMultiplayerEngine.getState().currentPlayerId);
+
         console.log('🔥 Firebase: syncing complete game state...');
         await syncGameState(localMultiplayerEngine.getState());
       }
@@ -2083,11 +2207,9 @@ function App() {
         if (engine.isBoardFull()) {
           // Game over in solo mode
           const finalScore = gameManager.getCurrentPlayer()?.score || 0;
-          const isNewHS = updateHighScoreIfBetter(finalScore);
+          // updateHighScore returns true if it's a new high score, and handles cloud sync
+          const isNewHS = await updateHighScore(finalScore);
           setIsNewHighScore(isNewHS);
-          if (isNewHS) {
-            setHighScore(finalScore);
-          }
           setSoloGameOver(true);
         }
         // In solo mode, don't advance turn (always same player)
@@ -2137,24 +2259,39 @@ function App() {
     setShowSwapConfirm(true);
   };
 
-  const confirmSwapTiles = () => {
+  const confirmSwapTiles = async () => {
     if (selectedTiles.length === 0) return;
 
     try {
-      if (isMultiplayer) {
-        // Multiplayer: use socket
-        firebaseSwapTiles(selectedTiles);
+      if (isMultiplayer && localMultiplayerEngine && room && playerId) {
+        // Multiplayer: swap on local engine and sync to Firebase
+        const myRoomPlayerIndex = room.players.findIndex((rp: any) => rp.id === playerId);
+        const myGamePlayerId = myRoomPlayerIndex !== -1 ? myRoomPlayerIndex : -1;
+
+        // Perform the swap on local engine
+        localMultiplayerEngine.swapTiles(myGamePlayerId, selectedTiles);
+        console.log('🔄 Swapped tiles locally');
+
+        // Advance turn (player loses turn for swapping)
+        localMultiplayerEngine.advanceTurn();
+        console.log('👉 Advanced turn to player:', localMultiplayerEngine.getState().currentPlayerId);
+
+        // Sync to Firebase
+        console.log('🔥 Firebase: syncing after swap...');
+        await syncGameState(localMultiplayerEngine.getState());
 
         // Clear selections
         setSelectedTiles([]);
         setShowSwapConfirm(false);
-
-        // Clear all turn state
-        setSelectedWords([]);
         setTilesPlacedThisTurn([]);
-        setPendingPlacements([]);
+        setMultiplayerPlacementsThisTurn([]);
+        setSelectedWords([]);
 
-        console.log('Tiles swapped via socket, turn will advance on server');
+        // Update local rack from synced state
+        const newRack = localMultiplayerEngine.getState().players[myGamePlayerId]?.rack || [];
+        setLocalMultiplayerRack([...newRack]);
+
+        console.log('✅ Tiles swapped and synced to Firebase');
       } else {
         // Local game: use engine
         if (!gameManager || !engine) return;
@@ -2199,9 +2336,22 @@ function App() {
 
     const { x, y } = blankTileModal.position;
 
-    // Multiplayer mode: emit socket event
-    if (isMultiplayer) {
+    // Multiplayer mode: update local engine AND call Firebase
+    if (isMultiplayer && localMultiplayerEngine) {
       console.log('📤 Multiplayer: setting blank tile letter', { x, y, letter });
+
+      // Update the local engine state so the tile displays correctly
+      const localState = (localMultiplayerEngine as any).state;
+      if (localState?.board?.[y]?.[x]) {
+        const tile = localState.board[y][x];
+        if (tile && tile.letter === ' ') {
+          tile.blankLetter = letter.toUpperCase();
+          // Force re-render by creating new engine reference
+          setLocalMultiplayerEngine(new GrabbleEngine(localState));
+          console.log('✅ Updated blank tile locally');
+        }
+      }
+
       firebaseSetBlankLetter(x, y, letter);
       setBlankTileModal({ isOpen: false, position: null, currentLetter: '' });
       return;
@@ -2346,6 +2496,7 @@ function App() {
           setReady={setReady}
           startGame={firebaseStartGame}
           onPlaySolo={() => setShowSetup(true)}
+          getActiveGame={getActiveGame}
         />
       );
     }
@@ -2353,7 +2504,7 @@ function App() {
 
   // Local mode: show setup modal
   if (showSetup && !isMultiplayer) {
-    return <SetupModal onStartGame={handleStartGame} />;
+    return <SetupModal onStartGame={handleStartGame} highScore={highScore} />;
   }
 
   // Use socket game state for multiplayer, local state otherwise
@@ -2400,6 +2551,7 @@ function App() {
         setReady={setReady}
         startGame={firebaseStartGame}
         onPlaySolo={() => setShowSetup(true)}
+        getActiveGame={getActiveGame}
       />
     );
   }
@@ -2564,6 +2716,18 @@ function App() {
           }
         }}
       />
+      {/* Win Screen */}
+      {showWinScreen && winnerInfo && (
+        <WinScreen
+          winnerName={winnerInfo.name}
+          winnerScore={winnerInfo.score}
+          targetScore={winnerInfo.targetScore}
+          allPlayers={winnerInfo.allPlayers}
+          onContinuePlaying={handleContinuePlaying}
+          onNewGame={handleWinNewGame}
+          onGoHome={handleWinGoHome}
+        />
+      )}
       {/* Solo Game Over Modal */}
       {soloGameOver && (
         <div className="solo-game-over-modal">

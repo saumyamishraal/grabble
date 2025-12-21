@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UI_MESSAGES } from '../constants/messages';
+import { useAuth } from '../contexts/AuthContext';
+import AuthButton from './AuthButton';
 
 type GameModeSelection = 'normal' | 'solo';
 
@@ -12,9 +14,11 @@ interface SetupModalProps {
     gameMode: GameModeSelection,
     zenMode: boolean
   ) => void;
+  highScore?: number;
 }
 
-const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
+const SetupModal: React.FC<SetupModalProps> = ({ onStartGame, highScore = 0 }) => {
+  const { user } = useAuth();
   const [gameMode, setGameMode] = useState<GameModeSelection>('normal');
   const [numPlayers, setNumPlayers] = useState(2);
   const [playerNames, setPlayerNames] = useState<string[]>(['Player 1', 'Player 2']);
@@ -22,6 +26,14 @@ const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
   const [hintsEnabled, setHintsEnabled] = useState(true);
   const [zenMode, setZenMode] = useState(false);
   const [soloPlayerName, setSoloPlayerName] = useState('Player');
+
+  // Pre-fill player name from Google profile
+  useEffect(() => {
+    if (user?.displayName) {
+      setSoloPlayerName(user.displayName);
+      setPlayerNames(prev => [user.displayName!, ...prev.slice(1)]);
+    }
+  }, [user]);
 
   const handleNumPlayersChange = (value: number) => {
     setNumPlayers(value);
@@ -50,7 +62,10 @@ const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
   return (
     <div className="modal show">
       <div className="modal-content">
-        <h2>{UI_MESSAGES.setup.startNewGame}</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <h2 style={{ margin: 0 }}>{UI_MESSAGES.setup.startNewGame}</h2>
+          <AuthButton variant="compact" />
+        </div>
         <form onSubmit={handleSubmit}>
           {/* Game Mode Selection */}
           <div className="form-group">
@@ -103,11 +118,20 @@ const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
               <div className="form-group">
                 <label>{UI_MESSAGES.setup.targetScore}</label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={targetScore}
-                  onChange={(e) => setTargetScore(parseInt(e.target.value) || 100)}
-                  min="50"
-                  max="500"
+                  onChange={(e) => setTargetScore(e.target.value as any)}
+                  onBlur={(e) => {
+                    const val = parseInt(e.target.value) || 100;
+                    setTargetScore(Math.max(10, Math.min(500, val)));
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = parseInt((e.target as HTMLInputElement).value) || 100;
+                      setTargetScore(Math.max(10, Math.min(500, val)));
+                    }
+                  }}
                 />
               </div>
             </>
@@ -139,6 +163,21 @@ const SetupModal: React.FC<SetupModalProps> = ({ onStartGame }) => {
               <div className="solo-info">
                 <p>{UI_MESSAGES.setup.zenModeDescription}</p>
                 <p>{UI_MESSAGES.setup.zenModeHighScore}</p>
+                {highScore > 0 && (
+                  <div className="high-score-badge" style={{
+                    marginTop: '12px',
+                    padding: '10px 16px',
+                    background: 'linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 215, 0, 0.1))',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(255, 215, 0, 0.3)',
+                    textAlign: 'center'
+                  }}>
+                    <span style={{ fontSize: '0.85rem', color: '#aaa' }}>Your Best Score</span>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ffd700' }}>
+                      🏆 {highScore}
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           )}

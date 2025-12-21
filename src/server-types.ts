@@ -9,11 +9,13 @@ import type { GameState, Player } from './types';
  * Player in a room (before game starts)
  */
 export interface RoomPlayer {
-    id: string;           // Socket ID
+    id: string;           // Socket ID / Session ID
     name: string;         // Display name
     isHost: boolean;      // Room creator
     isReady: boolean;     // Ready to start
     color: string;        // Player color
+    uid?: string;         // Google UID (for signed-in users)
+    photoURL?: string;    // Google profile photo URL
 }
 
 /**
