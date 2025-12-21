@@ -21,7 +21,7 @@ import BlankTileModal from './components/BlankTileModal';
 import BonusOverlay from './components/BonusOverlay';
 import LobbyScreen from './components/LobbyScreen';
 import NewGameRequestModal from './components/NewGameRequestModal';
-import { useSocket } from './hooks/useSocket';
+import { useGameSync } from './hooks/useGameSync';
 import { getPlayerColor } from './utils/playerColors';
 import { UI_MESSAGES } from './constants/messages';
 
@@ -63,37 +63,43 @@ async function loadDictionary(): Promise<Set<string>> {
 }
 
 function App() {
-  // Socket hook for multiplayer
+  // Firebase hook for multiplayer
   const {
     connected,
     roomCode,
     room,
     isHost,
     playerId,
-    gameState: socketGameState,
-    tilesPlacedThisTurn: socketTilesPlacedThisTurn,
-    error: socketError,
-    clearError: clearSocketError,
+    gameState: firebaseGameState,
+    tilesPlacedThisTurn: firebaseTilesPlacedThisTurn,
+    error: firebaseError,
+    clearError: clearFirebaseError,
     createRoom,
     joinRoom,
     leaveRoom,
     setReady,
-    startGame: socketStartGame,
-    placeTiles: socketPlaceTiles,
-    claimWords: socketClaimWords,
-    swapTiles: socketSwapTiles,
-    removeTile: socketRemoveTile,
-    setBlankLetter: socketSetBlankLetter,
-    requestNewGame: socketRequestNewGame,
-    respondNewGame: socketRespondNewGame,
+    startGame: firebaseStartGame,
+    placeTiles: firebasePlaceTiles,
+    claimWords: firebaseClaimWords,
+    swapTiles: firebaseSwapTiles,
+    removeTile: firebaseRemoveTile,
+    setBlankLetter: firebaseSetBlankLetter,
+    requestNewGame: firebaseRequestNewGame,
+    respondNewGame: firebaseRespondNewGame,
     newGameRequest,
     newGameDeclined,
     clearNewGameRequest,
     clearNewGameDeclined,
-  } = useSocket();
+    syncGameState,
+  } = useGameSync();
+
+  // Log which backend is active
+  useEffect(() => {
+    console.log('🔥 Using Firebase backend');
+  }, []);
 
   // Multiplayer mode: true when in a room that is playing
-  const isMultiplayer = room?.status === 'playing' && socketGameState !== null;
+  const isMultiplayer = room?.status === 'playing' && firebaseGameState !== null;
 
   const [gameManager, setGameManager] = useState<GameStateManager | null>(null);
   const [engine, setEngine] = useState<GrabbleEngine | null>(null);
@@ -178,15 +184,15 @@ function App() {
 
   // Show socket errors in the error modal
   useEffect(() => {
-    if (socketError) {
-      setErrorModal({ isOpen: true, message: socketError });
-      clearSocketError(); // Clear socket error after showing in modal
+    if (firebaseError) {
+      setErrorModal({ isOpen: true, message: firebaseError });
+      clearFirebaseError(); // Clear socket error after showing in modal
     }
-  }, [socketError, clearSocketError]);
+  }, [firebaseError, clearFirebaseError]);
 
   // Extract recognized words from selected positions (preserving drag direction)
   const recognizedWords = useMemo(() => {
-    const currentState = isMultiplayer ? socketGameState : gameManager?.getState();
+    const currentState = isMultiplayer ? firebaseGameState : gameManager?.getState();
 
     if (!currentState || selectedWords.length === 0) return [];
 
@@ -197,7 +203,7 @@ function App() {
         return extractWordFromPositions(currentState.board, positions, true);
       })
       .filter(word => word.length >= 3);
-  }, [selectedWords, gameManager, socketGameState, isMultiplayer]);
+  }, [selectedWords, gameManager, firebaseGameState, isMultiplayer]);
 
   // Get all selected positions flattened for highlighting
   const selectedWordPositions = useMemo(() => {
@@ -238,24 +244,24 @@ function App() {
   // - Words are claimed (claimedWords changes)
   // - Rack changes (myPlayer's rack length changes)
   const currentClaimedWordsLength = isMultiplayer
-    ? socketGameState?.claimedWords?.length || 0
+    ? firebaseGameState?.claimedWords?.length || 0
     : gameManager?.getState()?.claimedWords?.length || 0;
 
   const currentRackLength = isMultiplayer
     ? ((): number => {
-      if (!socketGameState || !room || !playerId) return 0;
+      if (!firebaseGameState || !room || !playerId) return 0;
       const myRoomPlayerIndex = room.players.findIndex(rp => rp.id === playerId);
-      return socketGameState.players[myRoomPlayerIndex]?.rack?.length || 0;
+      return firebaseGameState.players[myRoomPlayerIndex]?.rack?.length || 0;
     })()
     : gameManager?.getCurrentPlayer()?.rack?.length || 0;
 
   // Sync local multiplayer engine from server state when:
-  // 1. Game starts (socketGameState becomes available)
+  // 1. Game starts (firebaseGameState becomes available)
   // 2. Turn changes to a new player (after opponent's turn ends)
   // 3. Server state updates from opponent's actions
   // This creates a local copy we can modify during our turn without waiting for server
   useEffect(() => {
-    if (!isMultiplayer || !socketGameState || !room || !playerId) {
+    if (!isMultiplayer || !firebaseGameState || !room || !playerId) {
       // Not in multiplayer mode, clear local engine
       if (localMultiplayerEngine) {
         setLocalMultiplayerEngine(null);
@@ -268,21 +274,21 @@ function App() {
     // Determine my game player ID
     const myRoomPlayerIndex = room.players.findIndex(rp => rp.id === playerId);
     const myGamePlayerId = myRoomPlayerIndex !== -1 ? myRoomPlayerIndex : -1;
-    const isMyTurn = socketGameState.currentPlayerId === myGamePlayerId;
+    const isMyTurn = firebaseGameState.currentPlayerId === myGamePlayerId;
 
     // Create a key representing the current server state version
     // We sync from server when: turn number changes, or we haven't synced yet
-    const currentTurn = socketGameState.currentPlayerId;
+    const currentTurn = firebaseGameState.currentPlayerId;
     const shouldSync = lastSyncedTurnRef.current !== currentTurn;
 
     if (shouldSync) {
       // Deep copy the game state for local engine
-      const stateCopy = JSON.parse(JSON.stringify(socketGameState));
+      const stateCopy = JSON.parse(JSON.stringify(firebaseGameState));
       const newLocalEngine = new GrabbleEngine(stateCopy);
       setLocalMultiplayerEngine(newLocalEngine);
 
       // Also sync the rack
-      const myRack = socketGameState.players[myRoomPlayerIndex]?.rack || [];
+      const myRack = firebaseGameState.players[myRoomPlayerIndex]?.rack || [];
       setLocalMultiplayerRack([...myRack]);
 
       // Clear tiles placed this turn when syncing
@@ -293,7 +299,7 @@ function App() {
       lastSyncedTurnRef.current = currentTurn;
       console.log('🔄 Synced local multiplayer engine from server, turn:', currentTurn, 'isMyTurn:', isMyTurn);
     }
-  }, [isMultiplayer, socketGameState, room, playerId]);
+  }, [isMultiplayer, firebaseGameState, room, playerId]);
 
   useEffect(() => {
     setHintLevel(0);
@@ -303,13 +309,13 @@ function App() {
     setSwapHintedTileIndices([]);
     setHintedColumns([]);
     cachedHintSolutionRef.current = null;  // Clear cached solution
-  }, [tilesPlacedThisTurn.length, socketGameState?.currentPlayerId, currentClaimedWordsLength, currentRackLength]);
+  }, [tilesPlacedThisTurn.length, firebaseGameState?.currentPlayerId, currentClaimedWordsLength, currentRackLength]);
 
   // Handle bonuses from multiplayer socket events
   // Process multiple words with bonuses sequentially
   useEffect(() => {
-    if (isMultiplayer && socketGameState && room && playerId) {
-      const claimedWords = socketGameState.claimedWords || [];
+    if (isMultiplayer && firebaseGameState && room && playerId) {
+      const claimedWords = firebaseGameState.claimedWords || [];
       const currentLength = claimedWords.length;
 
       // Only check if new words were added
@@ -348,7 +354,7 @@ function App() {
               });
             }
             if (bonuses.includes('emordnilap')) {
-              const reverseWord = getReverseWord(socketGameState.board, claimedWord.positions);
+              const reverseWord = getReverseWord(firebaseGameState.board, claimedWord.positions);
               newBonusAnimations.push({
                 word: claimedWord.word,
                 positions: claimedWord.positions,
@@ -474,12 +480,12 @@ function App() {
       // Reset when switching to local mode
       prevClaimedWordsLengthRef.current = 0;
     }
-  }, [socketGameState?.claimedWords, socketGameState?.board, isMultiplayer, room, playerId]);
+  }, [firebaseGameState?.claimedWords, firebaseGameState?.board, isMultiplayer, room, playerId]);
 
   // Trigger falling animation for newly placed tiles in multiplayer mode
   useEffect(() => {
-    if (isMultiplayer && socketGameState) {
-      const currentBoard = socketGameState.board;
+    if (isMultiplayer && firebaseGameState) {
+      const currentBoard = firebaseGameState.board;
       const prevBoard = prevSocketBoardRef.current;
 
       // Detect new tiles by comparing board states
@@ -497,8 +503,8 @@ function App() {
           }
         }
       } else {
-        // First render - use placedPositions from socketTilesPlacedThisTurn
-        newTiles.push(...socketTilesPlacedThisTurn);
+        // First render - use placedPositions from firebaseTilesPlacedThisTurn
+        newTiles.push(...firebaseTilesPlacedThisTurn);
       }
 
       // Trigger falling animation for each new tile
@@ -617,21 +623,21 @@ function App() {
       }
 
       // Update previous tiles tracking
-      prevSocketTilesPlacedRef.current = [...socketTilesPlacedThisTurn];
+      prevSocketTilesPlacedRef.current = [...firebaseTilesPlacedThisTurn];
     } else if (!isMultiplayer) {
       // Reset when switching to local mode
       prevSocketTilesPlacedRef.current = [];
       prevSocketBoardRef.current = null;
     }
-  }, [socketTilesPlacedThisTurn, isMultiplayer, socketGameState, room, playerId]);
+  }, [firebaseTilesPlacedThisTurn, isMultiplayer, firebaseGameState, room, playerId]);
 
   // Clear UI state when turn changes in multiplayer
   useEffect(() => {
-    if (isMultiplayer && socketGameState && room && playerId) {
+    if (isMultiplayer && firebaseGameState && room && playerId) {
       // Map socket ID to game player ID: room.players order matches game state players order
       const myRoomPlayerIndex = room.players.findIndex(rp => rp.id === playerId);
       const myGamePlayerId = myRoomPlayerIndex !== -1 ? myRoomPlayerIndex : -1;
-      const isMyTurn = socketGameState.currentPlayerId === myGamePlayerId;
+      const isMyTurn = firebaseGameState.currentPlayerId === myGamePlayerId;
 
       // If it's no longer my turn, clear all UI selections
       if (!isMyTurn) {
@@ -640,7 +646,7 @@ function App() {
         setWordDirection(null);
       }
     }
-  }, [isMultiplayer, socketGameState?.currentPlayerId, room, playerId]);
+  }, [isMultiplayer, firebaseGameState?.currentPlayerId, room, playerId]);
 
   const handleStartGame = (
     numPlayers: number,
@@ -677,11 +683,11 @@ function App() {
 
   // Handle hint request - progressive levels
   const handleHint = useCallback(() => {
-    const currentState = isMultiplayer ? socketGameState : gameManager?.getState();
+    const currentState = isMultiplayer ? firebaseGameState : gameManager?.getState();
     const currentRack = isMultiplayer ? ((): Tile[] => {
-      if (!socketGameState || !room || !playerId) return [];
+      if (!firebaseGameState || !room || !playerId) return [];
       const myRoomPlayerIndex = room.players.findIndex(rp => rp.id === playerId);
-      return socketGameState.players[myRoomPlayerIndex]?.rack || [];
+      return firebaseGameState.players[myRoomPlayerIndex]?.rack || [];
     })() : gameManager?.getCurrentPlayer()?.rack || [];
 
     if (!trie || !currentState || currentRack.length === 0) {
@@ -772,13 +778,13 @@ function App() {
     if (hintLevel < 4) {
       setHintLevel((prev) => Math.min(prev + 1, 4) as 0 | 1 | 2 | 3 | 4);
     }
-  }, [isMultiplayer, socketGameState, room, playerId, gameManager, trie, hintLevel]);
+  }, [isMultiplayer, firebaseGameState, room, playerId, gameManager, trie, hintLevel]);
 
   // Handler for starting a new game from the menu
   const handleStartNewGame = () => {
     if (isMultiplayer) {
       // In multiplayer, request a new game
-      socketRequestNewGame();
+      firebaseRequestNewGame();
       setNewGameRequestModal({
         isOpen: true,
         mode: 'request_sent'
@@ -837,13 +843,13 @@ function App() {
 
   // Handle new game request accept/decline
   const handleAcceptNewGame = () => {
-    socketRespondNewGame(true);
+    firebaseRespondNewGame(true);
     setNewGameRequestModal({ isOpen: false, mode: null });
     clearNewGameRequest();
   };
 
   const handleDeclineNewGame = () => {
-    socketRespondNewGame(false);
+    firebaseRespondNewGame(false);
     setNewGameRequestModal({ isOpen: false, mode: null });
     clearNewGameRequest();
   };
@@ -1703,8 +1709,8 @@ function App() {
 
       // Match tiles against server rack to find correct indices
       // The server rack is untouched (we only update locally), so we match tile data
-      if (multiplayerPlacementsThisTurn.length > 0 && socketGameState) {
-        const serverRack = socketGameState.players[myRoomPlayerIndex]?.rack || [];
+      if (multiplayerPlacementsThisTurn.length > 0 && firebaseGameState) {
+        const serverRack = firebaseGameState.players[myRoomPlayerIndex]?.rack || [];
 
         console.log('📤 Syncing', multiplayerPlacementsThisTurn.length, 'tiles to server...');
         console.log('  Server rack:', serverRack.map(t => t.letter).join(','));
@@ -1737,7 +1743,7 @@ function App() {
           sentOriginalIndices.push(serverRackIndex);
 
           console.log(`  → Sending column ${placement.column}, original ${serverRackIndex}, adjusted ${adjustedIndex} (${placement.tile.letter})`);
-          socketPlaceTiles([{ column: placement.column, tileIndex: adjustedIndex }]);
+          firebasePlaceTiles([{ column: placement.column, tileIndex: adjustedIndex }]);
         }
 
         // Small delay for server processing
@@ -1745,7 +1751,13 @@ function App() {
       }
 
       const claimsForServer = validWords.map(positions => ({ positions }));
-      socketClaimWords(claimsForServer);
+      firebaseClaimWords(claimsForServer);
+
+      // Sync the complete local game state to Firebase after local validation
+      if (localMultiplayerEngine) {
+        console.log('🔥 Firebase: syncing complete game state...');
+        await syncGameState(localMultiplayerEngine.getState());
+      }
 
       // Clear local selection state and multiplayer placements
       setSelectedWords([]);
@@ -2131,7 +2143,7 @@ function App() {
     try {
       if (isMultiplayer) {
         // Multiplayer: use socket
-        socketSwapTiles(selectedTiles);
+        firebaseSwapTiles(selectedTiles);
 
         // Clear selections
         setSelectedTiles([]);
@@ -2190,7 +2202,7 @@ function App() {
     // Multiplayer mode: emit socket event
     if (isMultiplayer) {
       console.log('📤 Multiplayer: setting blank tile letter', { x, y, letter });
-      socketSetBlankLetter(x, y, letter);
+      firebaseSetBlankLetter(x, y, letter);
       setBlankTileModal({ isOpen: false, position: null, currentLetter: '' });
       return;
     }
@@ -2322,8 +2334,8 @@ function App() {
       return (
         <LobbyScreen
           connected={connected}
-          error={socketError}
-          clearError={clearSocketError}
+          error={firebaseError}
+          clearError={clearFirebaseError}
           roomCode={roomCode}
           room={room}
           isHost={isHost}
@@ -2332,7 +2344,7 @@ function App() {
           joinRoom={joinRoom}
           leaveRoom={leaveRoom}
           setReady={setReady}
-          startGame={socketStartGame}
+          startGame={firebaseStartGame}
           onPlaySolo={() => setShowSetup(true)}
         />
       );
@@ -2347,7 +2359,7 @@ function App() {
   // Use socket game state for multiplayer, local state otherwise
   // In multiplayer with local changes: use localMultiplayerEngine for optimistic rendering
   const state = isMultiplayer
-    ? (localMultiplayerEngine ? localMultiplayerEngine.getState() : socketGameState!)
+    ? (localMultiplayerEngine ? localMultiplayerEngine.getState() : firebaseGameState!)
     : gameManager?.getState();
 
   // Find MY player index in the game (the player I control)
@@ -2376,8 +2388,8 @@ function App() {
     return (
       <LobbyScreen
         connected={connected}
-        error={socketError}
-        clearError={clearSocketError}
+        error={firebaseError}
+        clearError={clearFirebaseError}
         roomCode={roomCode}
         room={room}
         isHost={isHost}
@@ -2386,7 +2398,7 @@ function App() {
         joinRoom={joinRoom}
         leaveRoom={leaveRoom}
         setReady={setReady}
-        startGame={socketStartGame}
+        startGame={firebaseStartGame}
         onPlaySolo={() => setShowSetup(true)}
       />
     );
@@ -2396,7 +2408,7 @@ function App() {
   const turnIndicatorName = currentTurnPlayer?.name ?? 'Unknown';
 
   // Debug: Log tiles placed this turn
-  // In batch mode, we track tiles locally (tilesPlacedThisTurn), not from server (socketTilesPlacedThisTurn)
+  // In batch mode, we track tiles locally (tilesPlacedThisTurn), not from server (firebaseTilesPlacedThisTurn)
   // This ensures delete buttons show for locally placed tiles before submit
   const finalTilesPlacedThisTurn = tilesPlacedThisTurn; // Always use local tracking now
   console.log('🎮 Rendering with tilesPlacedThisTurn:', finalTilesPlacedThisTurn, 'isMultiplayer:', isMultiplayer);
