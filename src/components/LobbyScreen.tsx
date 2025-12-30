@@ -2,9 +2,8 @@
  * LobbyScreen - Create/Join Room UI for multiplayer
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import type { Room, RoomPlayer } from '../../server/types';
-import { trackRoomCreated, trackRoomJoined, trackGameStarted } from '../utils/mixpanel';
 
 interface LobbyScreenProps {
     // Connection state
@@ -48,31 +47,6 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
     const [playerName, setPlayerName] = useState('');
     const [targetScore, setTargetScore] = useState(100);
     const [joinCode, setJoinCode] = useState('');
-    const [hasTrackedRoomCreation, setHasTrackedRoomCreation] = useState(false);
-    const [hasTrackedRoomJoin, setHasTrackedRoomJoin] = useState(false);
-
-    // Track room creation
-    useEffect(() => {
-        if (roomCode && isHost && !hasTrackedRoomCreation) {
-            trackRoomCreated(roomCode);
-            setHasTrackedRoomCreation(true);
-        }
-    }, [roomCode, isHost, hasTrackedRoomCreation]);
-
-    // Track room joining
-    useEffect(() => {
-        if (roomCode && !isHost && !hasTrackedRoomJoin) {
-            trackRoomJoined(roomCode);
-            setHasTrackedRoomJoin(true);
-        }
-    }, [roomCode, isHost, hasTrackedRoomJoin]);
-
-    // Track multiplayer game start
-    useEffect(() => {
-        if (room && room.status === 'playing' && room.players.length > 0) {
-            trackGameStarted('multiplayer', room.players.length);
-        }
-    }, [room?.status, room?.players.length]);
 
     // If in a room, show waiting room
     if (roomCode && room) {
@@ -140,12 +114,7 @@ const LobbyScreen: React.FC<LobbyScreenProps> = ({
                         {isHost && (
                             <button
                                 className="btn btn-success"
-                                onClick={() => {
-                                    if (room) {
-                                        trackGameStarted('multiplayer', room.players.length);
-                                    }
-                                    startGame();
-                                }}
+                                onClick={startGame}
                                 disabled={!allReady}
                                 title={!allReady ? 'All players must be ready' : 'Start the game'}
                             >

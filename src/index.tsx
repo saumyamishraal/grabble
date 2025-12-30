@@ -4,16 +4,6 @@ import './index.css';
 import './styles.scss';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
-import mixpanel from 'mixpanel-browser';
-
-// Initialize Mixpanel
-mixpanel.init("1958a4fc5dedab0ca9c245e71978ca9c", {
-    debug: true,
-    track_pageview: true,
-    persistence: "localStorage",
-    autocapture: true,
-    record_sessions_percent: 100,
-});
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
