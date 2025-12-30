@@ -17,6 +17,7 @@ import SwapConfirmModal from './components/SwapConfirmModal';
 import BlankTileModal from './components/BlankTileModal';
 import LobbyScreen from './components/LobbyScreen';
 import { useSocket } from './hooks/useSocket';
+import { trackError, trackGameStarted, trackWordSubmitted, trackRoomCreated, trackRoomJoined } from './utils/mixpanel';
 
 // Dictionary loading function
 async function loadDictionary(): Promise<Set<string>> {
@@ -107,6 +108,8 @@ function App() {
   // Helper function to show error modal
   const showError = (message: string) => {
     setErrorModal({ isOpen: true, message });
+    // Track error event
+    trackError('application', message, undefined, window.location.href);
   };
 
   const closeErrorModal = () => {
@@ -226,6 +229,8 @@ function App() {
     setGameManager(manager);
     setEngine(gameEngine);
     setShowSetup(false);
+    // Track game started event
+    trackGameStarted('local', numPlayers);
   };
 
   const handleTileSelect = (index: number) => {
@@ -551,6 +556,9 @@ function App() {
       const claims = validWords.map(positions => ({ positions }));
       socketClaimWords(claims);
 
+      // Track word submitted event (score will be updated by server)
+      trackWordSubmitted(validWords.length, 0);
+
       // Clear local selection state
       setSelectedWords([]);
       setWordDirection(null);
@@ -697,6 +705,9 @@ function App() {
         }
 
         console.log('Word claims validated successfully! Score:', result.totalScore);
+
+        // Track word submitted event
+        trackWordSubmitted(validWords.length, result.totalScore);
 
         // Lock all blank tiles that were part of the submitted words
         const stateAfterSubmit = engine.getState();
